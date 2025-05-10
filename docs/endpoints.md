@@ -4,8 +4,7 @@ This document provides a brief overview of the Playtomic API endpoints supported
 
 ## Classes
 
-**Endpoint:** `/classes`  
-**Client Method:** `GetClasses`
+**Endpoint:** `/classes` **Client Method:** `GetClasses`
 
 Search for classes (academy sessions) with filtering options.
 
@@ -21,8 +20,7 @@ classes, err := client.GetClasses(ctx, params)
 
 ## Matches
 
-**Endpoint:** `/matches`  
-**Client Method:** `GetMatches`
+**Endpoint:** `/matches` **Client Method:** `GetMatches`
 
 Search for matches with filtering options.
 
@@ -38,8 +36,7 @@ matches, err := client.GetMatches(ctx, params)
 
 ## Lessons
 
-**Endpoint:** `/lessons`  
-**Client Method:** `GetLessons`
+**Endpoint:** `/lessons` **Client Method:** `GetLessons`
 
 Search for lessons/tournaments with filtering options. Unlike the other endpoints, this one only accepts a single tenant ID.
 

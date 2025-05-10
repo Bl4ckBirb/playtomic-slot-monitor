@@ -90,7 +90,7 @@ func (p *SearchClassesParams) ToURLValues() url.Values {
 		values.Set("from_start_date", p.FromStartDate)
 	}
 
-	if p.Coordinate != nil && len(p.TenantIDs) == 0 {
+	if p.Coordinate != nil {
 		values.Set("coordinate", fmt.Sprintf("%f,%f", p.Coordinate.Lat, p.Coordinate.Lon))
 
 		if p.Radius > 0 {

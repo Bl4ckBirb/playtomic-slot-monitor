@@ -80,7 +80,7 @@ func TestSearchClassesParamsToURLValues(t *testing.T) {
 			},
 		},
 		{
-			name: "With tenants but no coordinates",
+			name: "Tenants and coordinate together",
 			params: SearchClassesParams{
 				TenantIDs: []string{"tenant-123"},
 				Coordinate: &Coordinate{
@@ -89,8 +89,9 @@ func TestSearchClassesParamsToURLValues(t *testing.T) {
 				},
 			},
 			expected: url.Values{
-				"tenant_id": []string{"tenant-123"},
-				"page":      []string{"0"},
+				"tenant_id":  []string{"tenant-123"},
+				"coordinate": []string{"40.416775,-3.703790"},
+				"page":       []string{"0"},
 			},
 		},
 	}
