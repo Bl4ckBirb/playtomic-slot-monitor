@@ -58,7 +58,7 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint string, query
 	// Handle non-200 responses
 	if resp.StatusCode != http.StatusOK {
 		var apiErr struct {
-			Error   string                 `json:"error"`
+			Error   string         `json:"error"`
 			Details map[string]any `json:"details"`
 		}
 

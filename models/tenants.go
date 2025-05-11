@@ -2,12 +2,12 @@ package models
 
 // Tenant represents a club/venue in the Playtomic API
 type Tenant struct {
-	TenantID        string                 `json:"tenant_id"`
-	TenantName      string                 `json:"tenant_name"`
-	Address         Address                `json:"address"`
-	Images          []string               `json:"images"`
+	TenantID        string         `json:"tenant_id"`
+	TenantName      string         `json:"tenant_name"`
+	Address         Address        `json:"address"`
+	Images          []string       `json:"images"`
 	Properties      map[string]any `json:"properties"`
-	PlaytomicStatus string                 `json:"playtomic_status"`
+	PlaytomicStatus string         `json:"playtomic_status"`
 }
 
 // Address represents a physical address

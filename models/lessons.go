@@ -17,7 +17,7 @@ type Lesson struct {
 	MinPlayers              int            `json:"min_players"`
 	MaxPlayers              int            `json:"max_players"`
 	RegisteredPlayers       []LessonPlayer `json:"registered_players"`
-	ReservationIDs          any    `json:"reservation_ids"` // Can be null or array
+	ReservationIDs          any            `json:"reservation_ids"` // Can be null or array
 	LevelDescription        string         `json:"level_description"`
 	Tags                    []string       `json:"tags"`
 	Description             string         `json:"description"`
@@ -48,10 +48,10 @@ type LessonPlayer struct {
 
 // LessonTenant represents a club in the lesson context
 type LessonTenant struct {
-	TenantID      string                 `json:"tenant_id"`
-	TenantName    string                 `json:"tenant_name"`
-	TenantAddress Address                `json:"tenant_address"`
-	TenantImages  []string               `json:"tenant_images"`
+	TenantID      string         `json:"tenant_id"`
+	TenantName    string         `json:"tenant_name"`
+	TenantAddress Address        `json:"tenant_address"`
+	TenantImages  []string       `json:"tenant_images"`
 	Properties    map[string]any `json:"properties"`
 }
 

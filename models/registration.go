@@ -12,14 +12,14 @@ type RegistrationInfo struct {
 
 // Registration represents a registration
 type Registration struct {
-	ClassRegistrationID      string      `json:"class_registration_id"`
-	Player                   Player      `json:"player"`
-	Price                    string      `json:"price"`
-	RegistrationDate         string      `json:"registration_date"`
-	Payment                  Payment     `json:"payment"`
-	CustomPriceConfiguration any `json:"custom_price_configuration"`
-	CustomPrice              string      `json:"custom_price"`
-	IsManualPrice            bool        `json:"is_manual_price"`
-	CourseBillID             *string     `json:"course_bill_id"`
-	CategoryName             *string     `json:"category_name"`
+	ClassRegistrationID      string  `json:"class_registration_id"`
+	Player                   Player  `json:"player"`
+	Price                    string  `json:"price"`
+	RegistrationDate         string  `json:"registration_date"`
+	Payment                  Payment `json:"payment"`
+	CustomPriceConfiguration any     `json:"custom_price_configuration"`
+	CustomPrice              string  `json:"custom_price"`
+	IsManualPrice            bool    `json:"is_manual_price"`
+	CourseBillID             *string `json:"course_bill_id"`
+	CategoryName             *string `json:"category_name"`
 }
