@@ -6,7 +6,7 @@ type Tenant struct {
 	TenantName      string                 `json:"tenant_name"`
 	Address         Address                `json:"address"`
 	Images          []string               `json:"images"`
-	Properties      map[string]interface{} `json:"properties"`
+	Properties      map[string]any `json:"properties"`
 	PlaytomicStatus string                 `json:"playtomic_status"`
 }
 

@@ -17,7 +17,7 @@ type Registration struct {
 	Price                    string      `json:"price"`
 	RegistrationDate         string      `json:"registration_date"`
 	Payment                  Payment     `json:"payment"`
-	CustomPriceConfiguration interface{} `json:"custom_price_configuration"`
+	CustomPriceConfiguration any `json:"custom_price_configuration"`
 	CustomPrice              string      `json:"custom_price"`
 	IsManualPrice            bool        `json:"is_manual_price"`
 	CourseBillID             *string     `json:"course_bill_id"`

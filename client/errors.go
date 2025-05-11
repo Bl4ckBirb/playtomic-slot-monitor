@@ -6,7 +6,7 @@ import "fmt"
 type APIError struct {
 	StatusCode int
 	Message    string
-	Details    map[string]interface{}
+	Details    map[string]any
 }
 
 // Error implements the error interface

@@ -58,7 +58,7 @@ func TestLessonTenantToTenant(t *testing.T) {
 		TenantName:    "Test Club",
 		TenantAddress: address,
 		TenantImages:  []string{"image1.jpg", "image2.jpg"},
-		Properties:    map[string]interface{}{"amenity": "courts"},
+		Properties:    map[string]any{"amenity": "courts"},
 	}
 
 	tenant := LessonTenantToTenant(&lessonTenant)

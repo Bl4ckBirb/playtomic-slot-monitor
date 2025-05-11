@@ -10,7 +10,7 @@ import (
 )
 
 // sendRequest sends a request to the Playtomic API and decodes the response
-func (c *Client) sendRequest(ctx context.Context, method, endpoint string, queryParams string, body io.Reader, result interface{}) error {
+func (c *Client) sendRequest(ctx context.Context, method, endpoint string, queryParams string, body io.Reader, result any) error {
 	reqURL := fmt.Sprintf("%s%s?%s", c.baseURL, endpoint, queryParams)
 
 	var resp *http.Response
@@ -59,7 +59,7 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint string, query
 	if resp.StatusCode != http.StatusOK {
 		var apiErr struct {
 			Error   string                 `json:"error"`
-			Details map[string]interface{} `json:"details"`
+			Details map[string]any `json:"details"`
 		}
 
 		if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error != "" {

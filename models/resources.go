@@ -5,5 +5,5 @@ type Resource struct {
 	ID         string                 `json:"id"`
 	LockID     string                 `json:"lock_id"`
 	Name       string                 `json:"name"`
-	Properties map[string]interface{} `json:"properties"`
+	Properties map[string]any `json:"properties"`
 }
