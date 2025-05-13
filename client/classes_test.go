@@ -12,7 +12,7 @@ import (
 
 func TestGetClasses(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/classes" {
+		if r.URL.Path != "/v1/classes" {
 			t.Errorf("Expected path /classes, got %s", r.URL.Path)
 		}
 

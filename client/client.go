@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	// DefaultBaseURL is the default Playtomic API endpoint
-	DefaultBaseURL = "https://api.playtomic.io/v1"
+	// DefaultBaseURL is the Playtomic API host. Version prefixes belong to
+	// the endpoint paths, since the API mixes v1 and v3.
+	DefaultBaseURL = "https://api.playtomic.io"
 
 	// DefaultTimeout is the default client timeout
 	DefaultTimeout = 30 * time.Second

@@ -74,7 +74,7 @@ The client can be customized with various options:
 ```go
 client := client.NewClient(
     // Set a custom base URL (useful for testing)
-    client.WithBaseURL("https://api.playtomic.io/v1"),
+    client.WithBaseURL("https://api.playtomic.io"),
     
     // Set HTTP client timeout
     client.WithTimeout(15 * time.Second),

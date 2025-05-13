@@ -12,7 +12,7 @@ import (
 
 func TestGetMatches(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/matches" {
+		if r.URL.Path != "/v1/matches" {
 			t.Errorf("Expected path /matches, got %s", r.URL.Path)
 		}
 

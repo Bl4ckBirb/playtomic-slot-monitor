@@ -11,7 +11,7 @@ import (
 // GetMatches retrieves matches from the Playtomic API
 func (c *Client) GetMatches(ctx context.Context, params *models.SearchMatchesParams) ([]models.Match, error) {
 	var matches []models.Match
-	err := c.sendRequest(ctx, http.MethodGet, "/matches", params.ToURLValues().Encode(), nil, &matches)
+	err := c.sendRequest(ctx, http.MethodGet, "/v1/matches", params.ToURLValues().Encode(), nil, &matches)
 	if err != nil {
 		return nil, fmt.Errorf("fetching matches: %w", err)
 	}
