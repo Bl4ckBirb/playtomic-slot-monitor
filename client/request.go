@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,52 +11,54 @@ import (
 )
 
 // sendRequest sends a request to the Playtomic API and decodes the response
-func (c *Client) sendRequest(ctx context.Context, method, endpoint string, queryParams string, body io.Reader, result any) error {
-	reqURL := fmt.Sprintf("%s%s?%s", c.baseURL, endpoint, queryParams)
-
-	var resp *http.Response
-	var err error
-	var req *http.Request
-
-	// Create the request
-	req, err = http.NewRequestWithContext(ctx, method, reqURL, body)
-	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
+func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string, body []byte, result any) error {
+	reqURL := c.baseURL + endpoint
+	if query != "" {
+		reqURL += "?" + query
 	}
 
-	// Set headers
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
+	for attempt := 0; ; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, method, reqURL, bodyReader(body))
+		if err != nil {
+			return fmt.Errorf("creating request: %w", err)
+		}
 
-	// Try the request with retries
-	for attempt := 0; attempt <= c.maxRetries; attempt++ {
-		resp, err = c.httpClient.Do(req)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", c.userAgent)
+
+		resp, err := c.httpClient.Do(req)
 		if err == nil {
-			break
+			return decode(resp, result)
 		}
 
-		// If this was the last attempt, return the error
-		if attempt == c.maxRetries {
-			return fmt.Errorf("sending request after %d attempts: %w", c.maxRetries, err)
+		if attempt >= c.maxRetries {
+			return fmt.Errorf("sending request after %d attempts: %w", attempt+1, err)
 		}
 
-		// Wait before retrying (could implement exponential backoff)
-		select {
-		case <-time.After(time.Duration(attempt) * 500 * time.Millisecond):
-		case <-ctx.Done():
-			return ctx.Err()
+		if err := sleep(ctx, time.Duration(attempt+1)*500*time.Millisecond); err != nil {
+			return err
 		}
 	}
+}
+
+// bodyReader hands each attempt a fresh reader over the same bytes. A nil body
+// has to stay a nil reader, not a reader over nothing.
+func bodyReader(body []byte) io.Reader {
+	if body == nil {
+		return nil
+	}
+	return bytes.NewReader(body)
+}
+
+func decode(resp *http.Response, result any) error {
 	defer resp.Body.Close()
 
-	// Read response body
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
-	// Handle non-200 responses
 	if resp.StatusCode != http.StatusOK {
 		var apiErr struct {
 			Error   string         `json:"error"`
@@ -76,10 +79,21 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint string, query
 		}
 	}
 
-	// Decode into result
 	if err := json.Unmarshal(respBody, result); err != nil {
 		return fmt.Errorf("decoding response: %w", err)
 	}
 
 	return nil
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
