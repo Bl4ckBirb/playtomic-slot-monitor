@@ -19,15 +19,24 @@ const (
 
 	// DefaultUserAgent is the default User-Agent sent with requests
 	DefaultUserAgent = "PlaytomicGoClient/1.0"
+
+	// DefaultRetryWait is the first backoff window. It doubles per attempt.
+	DefaultRetryWait = 500 * time.Millisecond
+
+	// DefaultMaxRetryWait caps a single wait, including one the server asked
+	// for through Retry-After.
+	DefaultMaxRetryWait = 10 * time.Second
 )
 
 // Client provides access to the Playtomic API
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	userAgent  string
-	maxRetries int
-	debug      bool
+	httpClient   *http.Client
+	baseURL      string
+	userAgent    string
+	maxRetries   int
+	retryWait    time.Duration
+	maxRetryWait time.Duration
+	debug        bool
 }
 
 // NewClient creates a new Playtomic API client with the given options
@@ -36,9 +45,11 @@ func NewClient(opts ...Option) *Client {
 		httpClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
-		baseURL:    DefaultBaseURL,
-		userAgent:  DefaultUserAgent,
-		maxRetries: DefaultMaxRetries,
+		baseURL:      DefaultBaseURL,
+		userAgent:    DefaultUserAgent,
+		maxRetries:   DefaultMaxRetries,
+		retryWait:    DefaultRetryWait,
+		maxRetryWait: DefaultMaxRetryWait,
 	}
 
 	// Apply options

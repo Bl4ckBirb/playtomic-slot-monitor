@@ -20,3 +20,4 @@ issues:
     - path: _test\.go
       linters:
         - bodyclose
+        - errcheck

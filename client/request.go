@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -28,27 +30,103 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 		req.Header.Set("User-Agent", c.userAgent)
 
 		resp, err := c.httpClient.Do(req)
-		if err == nil {
+		final := attempt >= c.maxRetries
+
+		if err != nil {
+			if final || !idempotent(method) {
+				return fmt.Errorf("sending request after %d attempts: %w", attempt+1, err)
+			}
+			if err := sleep(ctx, c.backoff(attempt, 0)); err != nil {
+				return err
+			}
+			continue
+		}
+
+		if final || !retriable(method, resp.StatusCode) {
 			return decode(resp, result)
 		}
 
-		if attempt >= c.maxRetries {
-			return fmt.Errorf("sending request after %d attempts: %w", attempt+1, err)
-		}
-
-		if err := sleep(ctx, time.Duration(attempt+1)*500*time.Millisecond); err != nil {
+		wait := c.backoff(attempt, retryAfter(resp))
+		drain(resp)
+		if err := sleep(ctx, wait); err != nil {
 			return err
 		}
 	}
 }
 
-// bodyReader hands each attempt a fresh reader over the same bytes. A nil body
-// has to stay a nil reader, not a reader over nothing.
+// bodyReader gives each attempt a fresh reader. A nil body must stay nil.
 func bodyReader(body []byte) io.Reader {
 	if body == nil {
 		return nil
 	}
 	return bytes.NewReader(body)
+}
+
+// idempotent reports whether a method survives replay after a failure that may
+// already have reached the server.
+func idempotent(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut,
+		http.MethodDelete, http.MethodOptions, http.MethodTrace:
+		return true
+	default:
+		return false
+	}
+}
+
+// retriable: a 429 was refused rather than processed, so any method can go
+// again. 501 is a permanent refusal wearing a 5xx.
+func retriable(method string, status int) bool {
+	if status == http.StatusTooManyRequests {
+		return true
+	}
+	return status >= 500 && status != http.StatusNotImplemented && idempotent(method)
+}
+
+// backoff doubles the window per attempt and lands in its upper half, so
+// clients that all got the same 503 do not come back in step. Retry-After wins.
+func (c *Client) backoff(attempt int, after time.Duration) time.Duration {
+	if after > 0 {
+		return min(after, c.maxRetryWait)
+	}
+
+	window := c.retryWait << attempt
+	if window <= 0 || window > c.maxRetryWait {
+		window = c.maxRetryWait
+	}
+	if window <= 0 {
+		return 0
+	}
+	return window/2 + rand.N(window/2+1)
+}
+
+// retryAfter reads the header, which RFC 9110 allows as seconds or an HTTP date.
+func retryAfter(resp *http.Response) time.Duration {
+	v := resp.Header.Get("Retry-After")
+	if v == "" {
+		return 0
+	}
+
+	if secs, err := strconv.Atoi(v); err == nil {
+		if secs <= 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+
+	if when, err := http.ParseTime(v); err == nil {
+		if d := time.Until(when); d > 0 {
+			return d
+		}
+	}
+
+	return 0
+}
+
+// drain returns the connection to the pool instead of dropping it.
+func drain(resp *http.Response) {
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	_ = resp.Body.Close()
 }
 
 func decode(resp *http.Response, result any) error {

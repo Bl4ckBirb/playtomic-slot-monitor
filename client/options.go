@@ -29,6 +29,19 @@ func WithRetries(retries int) Option {
 	}
 }
 
+// WithBackoff sets the first retry window and the cap on any single wait.
+// Non-positive values leave the default in place.
+func WithBackoff(first, maxWait time.Duration) Option {
+	return func(c *Client) {
+		if first > 0 {
+			c.retryWait = first
+		}
+		if maxWait > 0 {
+			c.maxRetryWait = maxWait
+		}
+	}
+}
+
 // WithDebug enables debug logging
 func WithDebug(enabled bool) Option {
 	return func(c *Client) {
