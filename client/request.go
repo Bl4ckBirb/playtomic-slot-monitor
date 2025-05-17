@@ -132,32 +132,20 @@ func drain(resp *http.Response) {
 func decode(resp *http.Response, result any) error {
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		var apiErr struct {
-			Error   string         `json:"error"`
-			Details map[string]any `json:"details"`
-		}
-
-		if err := json.Unmarshal(respBody, &apiErr); err == nil && apiErr.Error != "" {
-			return &APIError{
-				StatusCode: resp.StatusCode,
-				Message:    apiErr.Error,
-				Details:    apiErr.Details,
-			}
-		}
-
-		return &APIError{
-			StatusCode: resp.StatusCode,
-			Message:    "Unexpected response from API",
-		}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return newError(resp, body)
 	}
 
-	if err := json.Unmarshal(respBody, result); err != nil {
+	if result == nil || len(bytes.TrimSpace(body)) == 0 {
+		return nil
+	}
+
+	if err := json.Unmarshal(body, result); err != nil {
 		return fmt.Errorf("decoding response: %w", err)
 	}
 

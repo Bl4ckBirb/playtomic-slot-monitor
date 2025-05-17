@@ -104,23 +104,24 @@ For detailed information about API endpoints, parameters, and examples, see:
 
 The client provides detailed error handling:
 
+Status codes map onto sentinels, so branch with `errors.Is`:
+
 ```go
-classes, err := client.GetClasses(ctx, params)
-if err != nil {
-    // Check if it's an API error
-    if apiErr, ok := err.(*client.APIError); ok {
-        fmt.Printf("API Error: %s (Status: %d)\n", apiErr.Message, apiErr.StatusCode)
-        
-        // Access details from the error response
-        if details, ok := apiErr.Details["more_info"]; ok {
-            fmt.Printf("Additional info: %v\n", details)
-        }
-    } else {
-        // Handle network/client errors
-        fmt.Printf("Request error: %v\n", err)
+classes, err := c.GetClasses(ctx, params)
+switch {
+case errors.Is(err, client.ErrRateLimited):
+    // Back off. apiErr.RetryAfter carries what the server asked for.
+case errors.Is(err, client.ErrUnauthorized):
+    // Token expired.
+case err != nil:
+    var apiErr *client.Error
+    if errors.As(err, &apiErr) {
+        log.Printf("%d %s (request %s)", apiErr.StatusCode, apiErr.Message, apiErr.RequestID)
     }
 }
 ```
+
+`*client.Error` keeps the method, URL, status, request ID and a flattened snippet of the body, so a response that never reached the API still says what happened rather than failing on a JSON decode.
 
 ## Examples
 
