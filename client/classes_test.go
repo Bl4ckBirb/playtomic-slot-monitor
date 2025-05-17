@@ -10,7 +10,7 @@ import (
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
-func TestGetClasses(t *testing.T) {
+func TestSearchClasses(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/classes" {
 			t.Errorf("Expected path /classes, got %s", r.URL.Path)
@@ -65,7 +65,7 @@ func TestGetClasses(t *testing.T) {
 		IncludeSummary: true,
 	}
 
-	classes, err := client.GetClasses(context.Background(), params)
+	classes, err := client.SearchClasses(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

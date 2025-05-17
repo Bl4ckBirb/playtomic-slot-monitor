@@ -10,7 +10,7 @@ import (
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
-func TestGetMatches(t *testing.T) {
+func TestSearchMatches(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/matches" {
 			t.Errorf("Expected path /matches, got %s", r.URL.Path)
@@ -95,7 +95,7 @@ func TestGetMatches(t *testing.T) {
 		SportID:    "PADEL",
 	}
 
-	matches, err := client.GetMatches(context.Background(), params)
+	matches, err := client.SearchMatches(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

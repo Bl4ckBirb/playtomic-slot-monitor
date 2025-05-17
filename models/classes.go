@@ -55,6 +55,9 @@ type SearchClassesParams struct {
 // ToURLValues converts SearchClassesParams to url.Values
 func (p *SearchClassesParams) ToURLValues() url.Values {
 	values := url.Values{}
+	if p == nil {
+		return values
+	}
 
 	if s := strings.TrimSpace(p.Sort); s != "" {
 		values.Set("sort", s)

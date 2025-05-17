@@ -4,7 +4,7 @@ This document provides a brief overview of the Playtomic API endpoints supported
 
 ## Classes
 
-**Endpoint:** `/classes` **Client Method:** `GetClasses`
+**Endpoint:** `/classes` **Client Method:** `SearchClasses`
 
 Search for classes (academy sessions) with filtering options.
 
@@ -15,12 +15,12 @@ params := &models.SearchClassesParams{
     IncludeSummary: true,
     FromStartDate:  "2023-01-01T00:00:00",
 }
-classes, err := client.GetClasses(ctx, params)
+classes, err := client.SearchClasses(ctx, params)
 ```
 
 ## Matches
 
-**Endpoint:** `/matches` **Client Method:** `GetMatches`
+**Endpoint:** `/matches` **Client Method:** `SearchMatches`
 
 Search for matches with filtering options.
 
@@ -31,12 +31,12 @@ params := &models.SearchMatchesParams{
     TenantIDs:     []string{"tenant-id1", "tenant-id2"},
     FromStartDate: "2023-01-01T00:00:00",
 }
-matches, err := client.GetMatches(ctx, params)
+matches, err := client.SearchMatches(ctx, params)
 ```
 
 ## Lessons
 
-**Endpoint:** `/lessons` **Client Method:** `GetLessons`
+**Endpoint:** `/lessons` **Client Method:** `SearchLessons`
 
 Search for lessons/tournaments with filtering options. Unlike the other endpoints, this one only accepts a single tenant ID.
 
@@ -48,7 +48,7 @@ params := &models.SearchLessonsParams{
     Status:               "REGISTRATION_OPEN,REGISTRATION_CLOSED",
     FromStartDate:        "2023-01-01T00:00:00",
 }
-lessons, err := client.GetLessons(ctx, params)
+lessons, err := client.SearchLessons(ctx, params)
 ```
 
 ## Model Conversion

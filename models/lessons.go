@@ -69,6 +69,9 @@ type SearchLessonsParams struct {
 // ToURLValues converts SearchLessonsParams to url.Values
 func (p *SearchLessonsParams) ToURLValues() url.Values {
 	values := url.Values{}
+	if p == nil {
+		return values
+	}
 
 	if s := strings.TrimSpace(p.Sort); s != "" {
 		values.Set("sort", s)

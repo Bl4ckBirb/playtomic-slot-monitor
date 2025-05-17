@@ -2,18 +2,11 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
-// GetLessons retrieves lessons from the Playtomic API
-func (c *Client) GetLessons(ctx context.Context, params *models.SearchLessonsParams) ([]models.Lesson, error) {
-	var lessons []models.Lesson
-	err := c.sendRequest(ctx, http.MethodGet, "/v1/lessons", params.ToURLValues().Encode(), nil, &lessons)
-	if err != nil {
-		return nil, fmt.Errorf("fetching lessons: %w", err)
-	}
-	return lessons, nil
+// SearchLessons returns lessons matching params. A nil params applies no filters.
+func (c *Client) SearchLessons(ctx context.Context, params *models.SearchLessonsParams) ([]models.Lesson, error) {
+	return get[[]models.Lesson](ctx, c, "/v1/lessons", params)
 }

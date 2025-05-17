@@ -2,18 +2,11 @@ package client
 
 import (
 	"context"
-	"fmt"
-	"net/http"
 
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
-// GetMatches retrieves matches from the Playtomic API
-func (c *Client) GetMatches(ctx context.Context, params *models.SearchMatchesParams) ([]models.Match, error) {
-	var matches []models.Match
-	err := c.sendRequest(ctx, http.MethodGet, "/v1/matches", params.ToURLValues().Encode(), nil, &matches)
-	if err != nil {
-		return nil, fmt.Errorf("fetching matches: %w", err)
-	}
-	return matches, nil
+// SearchMatches returns matches matching params. A nil params applies no filters.
+func (c *Client) SearchMatches(ctx context.Context, params *models.SearchMatchesParams) ([]models.Match, error) {
+	return get[[]models.Match](ctx, c, "/v1/matches", params)
 }

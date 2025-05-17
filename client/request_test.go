@@ -68,18 +68,20 @@ func TestNegativeRetriesDoesNotPanic(t *testing.T) {
 	}
 }
 
-func TestOmitsEmptyQuery(t *testing.T) {
+// A nil *SearchClassesParams arrives as a non-nil interface holding a nil
+// pointer, so this exercises the nil receiver as well as the empty query.
+func TestNilParamsSendNoQuery(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" {
 			t.Errorf("got query %q, want none", r.URL.RawQuery)
 		}
-		w.Write([]byte(`{}`))
+		w.Write([]byte(`[]`))
 	}))
 	defer srv.Close()
 
 	c := NewClient(WithBaseURL(srv.URL))
-	if err := c.sendRequest(context.Background(), http.MethodGet, "/v1/thing", "", nil, &struct{}{}); err != nil {
-		t.Fatalf("sendRequest: %v", err)
+	if _, err := c.SearchClasses(context.Background(), nil); err != nil {
+		t.Fatalf("SearchClasses(nil): %v", err)
 	}
 }
 

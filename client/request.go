@@ -8,9 +8,29 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
+
+// queryParams is satisfied by the search parameter types in models. Declared
+// here rather than there so models stays free of transport concerns.
+type queryParams interface {
+	ToURLValues() url.Values
+}
+
+// get fetches path into a T. params may be a nil pointer inside a non-nil
+// interface, which is why every ToURLValues tolerates a nil receiver.
+func get[T any](ctx context.Context, c *Client, path string, params queryParams) (T, error) {
+	var out T
+	var query string
+	if params != nil {
+		query = params.ToURLValues().Encode()
+	}
+
+	err := c.sendRequest(ctx, http.MethodGet, path, query, nil, &out)
+	return out, err
+}
 
 // sendRequest sends a request to the Playtomic API and decodes the response
 func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string, body []byte, result any) error {

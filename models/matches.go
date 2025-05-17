@@ -73,6 +73,9 @@ type SearchMatchesParams struct {
 // ToURLValues converts SearchMatchesParams to url.Values
 func (p *SearchMatchesParams) ToURLValues() url.Values {
 	values := url.Values{}
+	if p == nil {
+		return values
+	}
 
 	if s := strings.TrimSpace(p.Sort); s != "" {
 		values.Set("sort", s)

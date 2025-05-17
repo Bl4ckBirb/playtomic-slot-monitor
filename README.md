@@ -52,7 +52,7 @@ func main() {
 
 	// Fetch classes
 	ctx := context.Background()
-	classes, err := c.GetClasses(ctx, params)
+	classes, err := c.SearchClasses(ctx, params)
 	if err != nil {
 		log.Fatalf("Error fetching classes: %v", err)
 	}
@@ -107,7 +107,7 @@ The client provides detailed error handling:
 Status codes map onto sentinels, so branch with `errors.Is`:
 
 ```go
-classes, err := c.GetClasses(ctx, params)
+classes, err := c.SearchClasses(ctx, params)
 switch {
 case errors.Is(err, client.ErrRateLimited):
     // Back off. apiErr.RetryAfter carries what the server asked for.

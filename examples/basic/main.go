@@ -126,7 +126,7 @@ func searchClasses(ctx context.Context, c *client.Client) ([]models.Class, error
 		classParams.TenantIDs = []string{tenantID}
 	}
 
-	return c.GetClasses(ctx, classParams)
+	return c.SearchClasses(ctx, classParams)
 }
 
 // searchMatches demonstrates searching for matches
@@ -148,7 +148,7 @@ func searchMatches(ctx context.Context, c *client.Client) ([]models.Match, error
 		matchParams.TenantIDs = []string{tenantID}
 	}
 
-	return c.GetMatches(ctx, matchParams)
+	return c.SearchMatches(ctx, matchParams)
 }
 
 // searchLessons demonstrates searching for lessons
@@ -170,7 +170,7 @@ func searchLessons(ctx context.Context, c *client.Client) ([]models.Lesson, erro
 		lessonParams.TenantID = tenantID
 	}
 
-	return c.GetLessons(ctx, lessonParams)
+	return c.SearchLessons(ctx, lessonParams)
 }
 
 // Helper function to get class title

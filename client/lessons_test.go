@@ -10,7 +10,7 @@ import (
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
-func TestGetLessons(t *testing.T) {
+func TestSearchLessons(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/lessons" {
 			t.Errorf("Expected path /lessons, got %s", r.URL.Path)
@@ -72,7 +72,7 @@ func TestGetLessons(t *testing.T) {
 		TournamentVisibility: "PUBLIC",
 	}
 
-	lessons, err := client.GetLessons(context.Background(), params)
+	lessons, err := client.SearchLessons(context.Background(), params)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
