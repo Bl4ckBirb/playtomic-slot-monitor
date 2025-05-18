@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -80,10 +81,10 @@ func (p *SearchClassesParams) ToURLValues() url.Values {
 	}
 
 	if p.Size > 0 {
-		values.Set("size", fmt.Sprintf("%d", p.Size))
+		values.Set("size", strconv.Itoa(p.Size))
 	}
 
-	values.Set("page", fmt.Sprintf("%d", p.Page))
+	values.Set("page", strconv.Itoa(p.Page))
 
 	if cv := strings.TrimSpace(p.CourseVisibility); cv != "" {
 		values.Set("course_visibility", cv)
@@ -97,7 +98,7 @@ func (p *SearchClassesParams) ToURLValues() url.Values {
 		values.Set("coordinate", fmt.Sprintf("%f,%f", p.Coordinate.Lat, p.Coordinate.Lon))
 
 		if p.Radius > 0 {
-			values.Set("radius", fmt.Sprintf("%d", p.Radius))
+			values.Set("radius", strconv.Itoa(p.Radius))
 		}
 	}
 

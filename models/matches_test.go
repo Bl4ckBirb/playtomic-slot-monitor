@@ -12,9 +12,11 @@ func TestSearchMatchesParamsToURLValues(t *testing.T) {
 		expected url.Values
 	}{
 		{
-			name:     "Empty params",
-			params:   SearchMatchesParams{},
-			expected: url.Values{},
+			name:   "Empty params",
+			params: SearchMatchesParams{},
+			expected: url.Values{
+				"page": []string{"0"},
+			},
 		},
 		{
 			name: "Complete params",
@@ -45,6 +47,7 @@ func TestSearchMatchesParamsToURLValues(t *testing.T) {
 				HasPlayers: true,
 			},
 			expected: url.Values{
+				"page":        []string{"0"},
 				"has_players": []string{"true"},
 			},
 		},
@@ -56,6 +59,7 @@ func TestSearchMatchesParamsToURLValues(t *testing.T) {
 				Visibility: "  VISIBLE  ",
 			},
 			expected: url.Values{
+				"page":       []string{"0"},
 				"sort":       []string{"start_date,DESC"},
 				"sport_id":   []string{"PADEL"},
 				"visibility": []string{"VISIBLE"},
@@ -67,6 +71,7 @@ func TestSearchMatchesParamsToURLValues(t *testing.T) {
 				TenantIDs: []string{"tenant-123"},
 			},
 			expected: url.Values{
+				"page":      []string{"0"},
 				"tenant_id": []string{"tenant-123"},
 			},
 		},

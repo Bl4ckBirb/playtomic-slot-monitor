@@ -1,8 +1,8 @@
 package models
 
 import (
-	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -102,12 +102,10 @@ func (p *SearchMatchesParams) ToURLValues() url.Values {
 	}
 
 	if p.Size > 0 {
-		values.Set("size", fmt.Sprintf("%d", p.Size))
+		values.Set("size", strconv.Itoa(p.Size))
 	}
 
-	if p.Page > 0 {
-		values.Set("page", fmt.Sprintf("%d", p.Page))
-	}
+	values.Set("page", strconv.Itoa(p.Page))
 
 	return values
 }

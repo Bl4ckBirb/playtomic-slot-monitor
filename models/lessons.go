@@ -1,8 +1,8 @@
 package models
 
 import (
-	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -90,10 +90,10 @@ func (p *SearchLessonsParams) ToURLValues() url.Values {
 	}
 
 	if p.Size > 0 {
-		values.Set("size", fmt.Sprintf("%d", p.Size))
+		values.Set("size", strconv.Itoa(p.Size))
 	}
 
-	values.Set("page", fmt.Sprintf("%d", p.Page))
+	values.Set("page", strconv.Itoa(p.Page))
 
 	if p.FromStartDate != "" {
 		values.Set("from_start_date", p.FromStartDate)
