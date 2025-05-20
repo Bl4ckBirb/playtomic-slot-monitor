@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -30,5 +31,57 @@ func TestFormatTime(t *testing.T) {
 	expected := "2023-05-15T14:30:00"
 	if formatted != expected {
 		t.Errorf("Expected %q, got %q", expected, formatted)
+	}
+}
+
+func TestTimeUnmarshal(t *testing.T) {
+	tests := []struct {
+		json string
+		want string
+	}{
+		{`"2023-05-15T14:30:00"`, "2023-05-15T14:30:00"},
+		{`"2023-05-15T14:30:00Z"`, "2023-05-15T14:30:00"},
+		{`"2023-05-15T16:30:00+02:00"`, "2023-05-15T16:30:00"},
+		{`null`, ""},
+		{`""`, ""},
+	}
+
+	for _, tt := range tests {
+		var got Time
+		if err := json.Unmarshal([]byte(tt.json), &got); err != nil {
+			t.Errorf("Unmarshal(%s): %v", tt.json, err)
+			continue
+		}
+		if got.String() != tt.want {
+			t.Errorf("Unmarshal(%s) = %q, want %q", tt.json, got, tt.want)
+		}
+	}
+
+	var bad Time
+	if err := json.Unmarshal([]byte(`"15/05/2023"`), &bad); err == nil {
+		t.Error("expected an error for an unrecognised layout")
+	}
+}
+
+func TestTimeRoundTrip(t *testing.T) {
+	type wrapper struct {
+		At Time `json:"at"`
+	}
+
+	var v wrapper
+	if err := json.Unmarshal([]byte(`{"at":"2023-05-15T14:30:00"}`), &v); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if string(b) != `{"at":"2023-05-15T14:30:00"}` {
+		t.Errorf("round trip = %s", b)
+	}
+
+	if b, _ := json.Marshal(wrapper{}); string(b) != `{"at":null}` {
+		t.Errorf("zero marshalled as %s, want null", b)
 	}
 }

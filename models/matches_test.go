@@ -3,6 +3,7 @@ package models
 import (
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestSearchMatchesParamsToURLValues(t *testing.T) {
@@ -26,7 +27,7 @@ func TestSearchMatchesParamsToURLValues(t *testing.T) {
 				SportID:       "PADEL",
 				TenantIDs:     []string{"tenant-123", "tenant-456"},
 				Visibility:    "VISIBLE",
-				FromStartDate: "2023-01-01T00:00:00",
+				FromStartDate: time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 				Size:          50,
 				Page:          2,
 			},

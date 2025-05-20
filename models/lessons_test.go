@@ -3,6 +3,7 @@ package models
 import (
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestSearchLessonsParamsToURLValues(t *testing.T) {
@@ -27,7 +28,7 @@ func TestSearchLessonsParamsToURLValues(t *testing.T) {
 				Status:               "REGISTRATION_OPEN",
 				Size:                 50,
 				Page:                 2,
-				FromStartDate:        "2023-01-01T00:00:00",
+				FromStartDate:        time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			},
 			expected: url.Values{
 				"sort":                  []string{"start_date,ASC"},

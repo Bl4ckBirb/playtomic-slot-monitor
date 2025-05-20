@@ -3,6 +3,7 @@ package models
 import (
 	"net/url"
 	"testing"
+	"time"
 )
 
 func TestSearchClassesParamsToURLValues(t *testing.T) {
@@ -29,7 +30,7 @@ func TestSearchClassesParamsToURLValues(t *testing.T) {
 				Size:             50,
 				Page:             2,
 				CourseVisibility: "PUBLIC",
-				FromStartDate:    "2023-01-01T00:00:00",
+				FromStartDate:    time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 				Coordinate: &Coordinate{
 					Lat: 40.416775,
 					Lon: -3.703790,

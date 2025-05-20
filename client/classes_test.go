@@ -2,101 +2,64 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
+const classesJSON = `[{
+  "type": "COURSE",
+  "academy_class_id": "class-123",
+  "sport_id": "PADEL",
+  "start_date": "2023-01-01T10:00:00",
+  "end_date": "2023-01-01T12:00:00",
+  "course_summary": {"course_id": "course-456", "name": "Test Class", "min_players": 2, "max_players": 4},
+  "resource": {"id": "resource-789", "name": "Court 1"},
+  "tenant": {"tenant_id": "test-tenant-id-1", "tenant_name": "Test Club"}
+}]`
+
 func TestSearchClasses(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/classes" {
-			t.Errorf("Expected path /classes, got %s", r.URL.Path)
+			t.Errorf("path = %s, want /v1/classes", r.URL.Path)
 		}
-
-		query := r.URL.Query()
-		if query.Get("tenant_id") != "test-tenant-id-1,test-tenant-id-2" {
-			t.Errorf("Expected tenant_id query param to be 'test-tenant-id-1,test-tenant-id-2', got '%s'", query.Get("tenant_id"))
+		q := r.URL.Query()
+		if got := q.Get("tenant_id"); got != "test-tenant-id-1,test-tenant-id-2" {
+			t.Errorf("tenant_id = %q", got)
 		}
-		if query.Get("include_summary") != "true" {
-			t.Errorf("Expected include_summary query param to be 'true', got '%s'", query.Get("include_summary"))
+		if got := q.Get("include_summary"); got != "true" {
+			t.Errorf("include_summary = %q", got)
 		}
-
-		mockResponse := []models.Class{
-			{
-				AcademyClassID: "class-123",
-				SportID:        "PADEL",
-				StartDate:      "2023-01-01T10:00:00",
-				EndDate:        "2023-01-01T12:00:00",
-				Type:           "COURSE",
-				CourseSummary: &models.CourseSummary{
-					CourseID:   "course-456",
-					Name:       "Test Class",
-					Gender:     "MIXED",
-					Visibility: "PUBLIC",
-					MinPlayers: 2,
-					MaxPlayers: 4,
-				},
-				Resource: models.Resource{
-					ID:   "resource-789",
-					Name: "Court 1",
-				},
-				Tenant: models.Tenant{
-					TenantID:   "test-tenant-id-1",
-					TenantName: "Test Club",
-				},
-			},
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
+		w.Write([]byte(classesJSON))
 	}))
-	defer server.Close()
+	defer srv.Close()
 
-	client := NewClient(
-		WithBaseURL(server.URL),
-	)
-
-	params := &models.SearchClassesParams{
+	c := NewClient(WithBaseURL(srv.URL))
+	classes, err := c.SearchClasses(context.Background(), &models.SearchClassesParams{
 		TenantIDs:      []string{"test-tenant-id-1", "test-tenant-id-2"},
 		IncludeSummary: true,
-	}
-
-	classes, err := client.SearchClasses(context.Background(), params)
+	})
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("SearchClasses: %v", err)
 	}
-
 	if len(classes) != 1 {
-		t.Fatalf("Expected 1 class, got %d", len(classes))
+		t.Fatalf("got %d classes, want 1", len(classes))
 	}
 
-	class := classes[0]
-	if class.AcademyClassID != "class-123" {
-		t.Errorf("Expected AcademyClassID 'class-123', got %s", class.AcademyClassID)
+	got := classes[0]
+	if got.AcademyClassID != "class-123" || got.Type != "COURSE" {
+		t.Errorf("class = %+v", got)
 	}
-	if class.Type != "COURSE" {
-		t.Errorf("Expected Type 'COURSE', got %s", class.Type)
+	if want := time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC); !got.StartDate.Equal(want) {
+		t.Errorf("StartDate = %v, want %v", got.StartDate, want)
 	}
-
-	if class.CourseSummary == nil {
-		t.Fatalf("Expected course summary, got nil")
+	if got.CourseSummary == nil || got.CourseSummary.Name != "Test Class" {
+		t.Errorf("CourseSummary = %+v", got.CourseSummary)
 	}
-	if class.CourseSummary.Name != "Test Class" {
-		t.Errorf("Expected course name 'Test Class', got %s", class.CourseSummary.Name)
-	}
-
-	if class.Resource.Name != "Court 1" {
-		t.Errorf("Expected resource name 'Court 1', got %s", class.Resource.Name)
-	}
-
-	if class.Tenant.TenantID != "test-tenant-id-1" {
-		t.Errorf("Expected tenant ID 'test-tenant-id-1', got %s", class.Tenant.TenantID)
-	}
-	if class.Tenant.TenantName != "Test Club" {
-		t.Errorf("Expected tenant name 'Test Club', got %s", class.Tenant.TenantName)
+	if got.Resource.Name != "Court 1" || got.Tenant.TenantName != "Test Club" {
+		t.Errorf("resource = %+v, tenant = %+v", got.Resource, got.Tenant)
 	}
 }

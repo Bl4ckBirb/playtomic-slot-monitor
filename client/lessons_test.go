@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,104 +9,67 @@ import (
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
+const lessonsJSON = `[{
+  "tournament_id": "lesson-123",
+  "tournament_name": "Test Lesson",
+  "start_date": "2023-01-01T10:00:00",
+  "end_date": "2023-01-01T12:00:00",
+  "type": "CLASS",
+  "min_players": 2,
+  "max_players": 4,
+  "reservation_ids": null,
+  "registered_players": [
+    {"user_id": "user-123", "full_name": "John Doe", "level_value": 3.5, "registration_price": "30.00"}
+  ],
+  "tournament_visibility": "PUBLIC",
+  "tournament_status": "REGISTRATION_OPEN",
+  "available_places": 2,
+  "tenant": {"tenant_id": "test-tenant-id", "tenant_name": "Test Club"}
+}]`
+
 func TestSearchLessons(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/lessons" {
-			t.Errorf("Expected path /lessons, got %s", r.URL.Path)
+			t.Errorf("path = %s, want /v1/lessons", r.URL.Path)
 		}
-
-		query := r.URL.Query()
-		if query.Get("tenant_id") != "test-tenant-id" {
-			t.Errorf("Expected tenant_id query param to be 'test-tenant-id', got '%s'", query.Get("tenant_id"))
+		q := r.URL.Query()
+		if got := q.Get("tenant_id"); got != "test-tenant-id" {
+			t.Errorf("tenant_id = %q", got)
 		}
-		if query.Get("tournament_visibility") != "PUBLIC" {
-			t.Errorf("Expected tournament_visibility query param to be 'PUBLIC', got '%s'", query.Get("tournament_visibility"))
+		if got := q.Get("tournament_visibility"); got != "PUBLIC" {
+			t.Errorf("tournament_visibility = %q", got)
 		}
-
-		mockResponse := []models.Lesson{
-			{
-				TournamentID:   "lesson-123",
-				TournamentName: "Test Lesson",
-				StartDate:      "2023-01-01T10:00:00",
-				EndDate:        "2023-01-01T12:00:00",
-				Type:           "CLASS",
-				MinPlayers:     2,
-				MaxPlayers:     4,
-				RegisteredPlayers: []models.LessonPlayer{
-					{
-						UserID:                "user-123",
-						PaymentID:             "payment-456",
-						RegistrationPrice:     "30.00",
-						PaymentMethodType:     "CREDIT_CARD",
-						FullName:              "John Doe",
-						LevelValue:            3.5,
-						Picture:               "profile.jpg",
-						PaidAtMerchant:        true,
-						PaymentB2bBillingType: "INVOICE",
-					},
-				},
-				LevelDescription:     "2.0 - 4.0",
-				TournamentVisibility: "PUBLIC",
-				TournamentStatus:     "REGISTRATION_OPEN",
-				AvailablePlaces:      2,
-				Tenant: models.LessonTenant{
-					TenantID:   "test-tenant-id",
-					TenantName: "Test Club",
-				},
-			},
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(mockResponse)
+		w.Write([]byte(lessonsJSON))
 	}))
-	defer server.Close()
+	defer srv.Close()
 
-	client := NewClient(
-		WithBaseURL(server.URL),
-	)
-
-	params := &models.SearchLessonsParams{
+	c := NewClient(WithBaseURL(srv.URL))
+	lessons, err := c.SearchLessons(context.Background(), &models.SearchLessonsParams{
 		TenantID:             "test-tenant-id",
 		TournamentVisibility: "PUBLIC",
-	}
-
-	lessons, err := client.SearchLessons(context.Background(), params)
+	})
 	if err != nil {
-		t.Fatalf("Expected no error, got %v", err)
+		t.Fatalf("SearchLessons: %v", err)
 	}
-
 	if len(lessons) != 1 {
-		t.Fatalf("Expected 1 lesson, got %d", len(lessons))
+		t.Fatalf("got %d lessons, want 1", len(lessons))
 	}
 
-	lesson := lessons[0]
-	if lesson.TournamentID != "lesson-123" {
-		t.Errorf("Expected TournamentID 'lesson-123', got %s", lesson.TournamentID)
+	got := lessons[0]
+	if got.TournamentID != "lesson-123" || got.TournamentName != "Test Lesson" {
+		t.Errorf("lesson = %+v", got)
 	}
-	if lesson.TournamentName != "Test Lesson" {
-		t.Errorf("Expected TournamentName 'Test Lesson', got %s", lesson.TournamentName)
+	if got.StartDate.String() != "2023-01-01T10:00:00" {
+		t.Errorf("StartDate = %q", got.StartDate)
 	}
-	if lesson.Type != "CLASS" {
-		t.Errorf("Expected Type 'CLASS', got %s", lesson.Type)
+	// The API sends null here as often as it sends a list.
+	if got.ReservationIDs != nil {
+		t.Errorf("ReservationIDs = %v, want nil", got.ReservationIDs)
 	}
-
-	if len(lesson.RegisteredPlayers) != 1 {
-		t.Fatalf("Expected 1 registered player, got %d", len(lesson.RegisteredPlayers))
+	if len(got.RegisteredPlayers) != 1 || got.RegisteredPlayers[0].FullName != "John Doe" {
+		t.Errorf("RegisteredPlayers = %+v", got.RegisteredPlayers)
 	}
-
-	player := lesson.RegisteredPlayers[0]
-	if player.UserID != "user-123" {
-		t.Errorf("Expected player UserID 'user-123', got %s", player.UserID)
-	}
-	if player.FullName != "John Doe" {
-		t.Errorf("Expected player FullName 'John Doe', got %s", player.FullName)
-	}
-
-	if lesson.Tenant.TenantID != "test-tenant-id" {
-		t.Errorf("Expected tenant ID 'test-tenant-id', got %s", lesson.Tenant.TenantID)
-	}
-	if lesson.Tenant.TenantName != "Test Club" {
-		t.Errorf("Expected tenant name 'Test Club', got %s", lesson.Tenant.TenantName)
+	if got.Tenant.TenantName != "Test Club" || got.AvailablePlaces != 2 {
+		t.Errorf("tenant = %+v, places = %d", got.Tenant, got.AvailablePlaces)
 	}
 }

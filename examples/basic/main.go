@@ -117,7 +117,7 @@ func searchClasses(ctx context.Context, c *client.Client) ([]models.Class, error
 		Size:             100,
 		Page:             0,
 		CourseVisibility: "PUBLIC",
-		FromStartDate:    time.Now().Format("2006-01-02") + "T00:00:00",
+		FromStartDate:    time.Now(),
 	}
 
 	// Add tenant IDs if provided
@@ -137,7 +137,7 @@ func searchMatches(ctx context.Context, c *client.Client) ([]models.Match, error
 		HasPlayers:    true,
 		SportID:       "PADEL",
 		Visibility:    "VISIBLE",
-		FromStartDate: time.Now().Format("2006-01-02") + "T00:00:00",
+		FromStartDate: time.Now(),
 		Size:          100,
 		Page:          0,
 	}
@@ -160,7 +160,7 @@ func searchLessons(ctx context.Context, c *client.Client) ([]models.Lesson, erro
 		TournamentVisibility: "PUBLIC",
 		Size:                 100,
 		Page:                 0,
-		FromStartDate:        time.Now().Format("2006-01-02") + "T00:00:00",
+		FromStartDate:        time.Now(),
 	}
 
 	// Add tenant ID if provided

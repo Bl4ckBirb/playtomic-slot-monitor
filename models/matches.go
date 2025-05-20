@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Match represents a match from the Playtomic API
@@ -19,8 +20,8 @@ type Match struct {
 	OwnerID                       *string            `json:"owner_id"`
 	Status                        string             `json:"status"`
 	GameStatus                    string             `json:"game_status"`
-	StartDate                     string             `json:"start_date"`
-	EndDate                       string             `json:"end_date"`
+	StartDate                     Time               `json:"start_date"`
+	EndDate                       Time               `json:"end_date"`
 	Tenant                        Tenant             `json:"tenant"`
 	LocationInfo                  LocationInfo       `json:"location_info"`
 	MatchType                     string             `json:"match_type"`
@@ -38,7 +39,7 @@ type Match struct {
 	RegistrationStatus            string             `json:"registration_status"`
 	IsPremium                     bool               `json:"is_premium"`
 	IsBooked                      bool               `json:"is_booked"`
-	CreatedAt                     string             `json:"created_at"`
+	CreatedAt                     Time               `json:"created_at"`
 	Visibility                    string             `json:"visibility"`
 }
 
@@ -65,7 +66,7 @@ type SearchMatchesParams struct {
 	SportID       string
 	TenantIDs     []string
 	Visibility    string
-	FromStartDate string
+	FromStartDate time.Time
 	Size          int
 	Page          int
 }
@@ -97,8 +98,8 @@ func (p *SearchMatchesParams) ToURLValues() url.Values {
 		values.Set("visibility", v)
 	}
 
-	if p.FromStartDate != "" {
-		values.Set("from_start_date", p.FromStartDate)
+	if !p.FromStartDate.IsZero() {
+		values.Set("from_start_date", FormatTime(p.FromStartDate))
 	}
 
 	if p.Size > 0 {

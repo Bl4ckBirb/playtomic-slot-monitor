@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Lesson represents a lesson from the Playtomic API
@@ -11,13 +12,13 @@ type Lesson struct {
 	TournamentID            string         `json:"tournament_id"`
 	TournamentName          string         `json:"tournament_name"`
 	TournamentImage         *string        `json:"tournament_image"`
-	StartDate               string         `json:"start_date"`
-	EndDate                 string         `json:"end_date"`
+	StartDate               Time           `json:"start_date"`
+	EndDate                 Time           `json:"end_date"`
 	Type                    string         `json:"type"`
 	MinPlayers              int            `json:"min_players"`
 	MaxPlayers              int            `json:"max_players"`
 	RegisteredPlayers       []LessonPlayer `json:"registered_players"`
-	ReservationIDs          any            `json:"reservation_ids"` // Can be null or array
+	ReservationIDs          []string       `json:"reservation_ids"`
 	LevelDescription        string         `json:"level_description"`
 	Tags                    []string       `json:"tags"`
 	Description             string         `json:"description"`
@@ -25,7 +26,7 @@ type Lesson struct {
 	Price                   string         `json:"price"`
 	SportID                 string         `json:"sport_id"`
 	Gender                  string         `json:"gender"`
-	RegistrationClosingTime string         `json:"registration_closing_time"`
+	RegistrationClosingTime Time           `json:"registration_closing_time"`
 	IsCancelled             bool           `json:"is_cancelled"`
 	TournamentVisibility    string         `json:"tournament_visibility"`
 	TournamentStatus        string         `json:"tournament_status"`
@@ -63,7 +64,7 @@ type SearchLessonsParams struct {
 	Status               string
 	Size                 int
 	Page                 int
-	FromStartDate        string
+	FromStartDate        time.Time
 }
 
 // ToURLValues converts SearchLessonsParams to url.Values
@@ -95,8 +96,8 @@ func (p *SearchLessonsParams) ToURLValues() url.Values {
 
 	values.Set("page", strconv.Itoa(p.Page))
 
-	if p.FromStartDate != "" {
-		values.Set("from_start_date", p.FromStartDate)
+	if !p.FromStartDate.IsZero() {
+		values.Set("from_start_date", FormatTime(p.FromStartDate))
 	}
 
 	return values

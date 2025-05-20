@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Class represents a class from the Playtomic API
@@ -14,8 +15,8 @@ type Class struct {
 	SportID          string           `json:"sport_id"`
 	Tenant           Tenant           `json:"tenant"`
 	Resource         Resource         `json:"resource"`
-	StartDate        string           `json:"start_date"`
-	EndDate          string           `json:"end_date"`
+	StartDate        Time             `json:"start_date"`
+	EndDate          Time             `json:"end_date"`
 	Coaches          []Coach          `json:"coaches"`
 	RegistrationInfo RegistrationInfo `json:"registration_info"`
 	CourseSummary    *CourseSummary   `json:"course_summary,omitempty"`
@@ -48,7 +49,7 @@ type SearchClassesParams struct {
 	Size             int
 	Page             int
 	CourseVisibility string
-	FromStartDate    string
+	FromStartDate    time.Time
 	Coordinate       *Coordinate
 	Radius           int
 }
@@ -90,8 +91,8 @@ func (p *SearchClassesParams) ToURLValues() url.Values {
 		values.Set("course_visibility", cv)
 	}
 
-	if p.FromStartDate != "" {
-		values.Set("from_start_date", p.FromStartDate)
+	if !p.FromStartDate.IsZero() {
+		values.Set("from_start_date", FormatTime(p.FromStartDate))
 	}
 
 	if p.Coordinate != nil {

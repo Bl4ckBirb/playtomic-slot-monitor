@@ -14,5 +14,5 @@ type Payment struct {
 	PaymentPrice            string  `json:"payment_price"`
 	PaymentReference        *string `json:"payment_reference"`
 	PayerID                 string  `json:"payer_id"`
-	PaymentDate             string  `json:"payment_date"`
+	PaymentDate             Time    `json:"payment_date"`
 }
