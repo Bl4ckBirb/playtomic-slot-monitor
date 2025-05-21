@@ -49,6 +49,17 @@ func WithDebug(enabled bool) Option {
 	}
 }
 
+// WithHeader sets a request header, overriding a default of the same name.
+// A header the API starts demanding can be supplied without a release.
+func WithHeader(name, value string) Option {
+	return func(c *Client) {
+		if c.headers == nil {
+			c.headers = http.Header{}
+		}
+		c.headers.Set(name, value)
+	}
+}
+
 // WithUserAgent sets a custom User-Agent header
 func WithUserAgent(userAgent string) Option {
 	return func(c *Client) {

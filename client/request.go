@@ -48,6 +48,9 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", c.userAgent)
+		for name, values := range c.headers {
+			req.Header[name] = values
+		}
 
 		resp, err := c.httpClient.Do(req)
 		final := attempt >= c.maxRetries

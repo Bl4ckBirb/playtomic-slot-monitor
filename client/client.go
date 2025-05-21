@@ -36,6 +36,7 @@ type Client struct {
 	maxRetries   int
 	retryWait    time.Duration
 	maxRetryWait time.Duration
+	headers      http.Header
 	debug        bool
 }
 
