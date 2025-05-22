@@ -19,6 +19,10 @@ var (
 	ErrNotFound     = errors.New("not found")
 	ErrRateLimited  = errors.New("rate limited")
 	ErrServer       = errors.New("server error")
+
+	// ErrMissingID guards the by-ID calls, which would otherwise request the
+	// collection and decode a list into a single value.
+	ErrMissingID = errors.New("missing id")
 )
 
 // maxSnippet bounds how much of an unparseable body reaches the error string.

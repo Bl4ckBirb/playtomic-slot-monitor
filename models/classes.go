@@ -1,7 +1,6 @@
 package models
 
 import (
-	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -96,7 +95,7 @@ func (p *SearchClassesParams) ToURLValues() url.Values {
 	}
 
 	if p.Coordinate != nil {
-		values.Set("coordinate", fmt.Sprintf("%f,%f", p.Coordinate.Lat, p.Coordinate.Lon))
+		values.Set("coordinate", p.Coordinate.String())
 
 		if p.Radius > 0 {
 			values.Set("radius", strconv.Itoa(p.Radius))
