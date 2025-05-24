@@ -9,9 +9,13 @@ import (
 // TimeFormat is the standard time format used by Playtomic API
 const TimeFormat = "2006-01-02T15:04:05"
 
+// DateFormat is the layout for the endpoints that carry a day rather than an
+// instant, such as availability.
+const DateFormat = "2006-01-02"
+
 // Time is an API timestamp. The API sends wall-clock times with no zone, so a
 // parsed value reads as UTC and only the tenant's Address.Timezone turns it
-// into a real instant.
+// into a real instant. A date-only value parses to midnight.
 type Time struct {
 	time.Time
 }
@@ -28,13 +32,13 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 
-	for _, layout := range []string{TimeFormat, time.RFC3339} {
+	for _, layout := range []string{TimeFormat, time.RFC3339, DateFormat} {
 		if parsed, err := time.Parse(layout, s); err == nil {
 			t.Time = parsed
 			return nil
 		}
 	}
-	return fmt.Errorf("time %q matches neither %q nor RFC 3339", s, TimeFormat)
+	return fmt.Errorf("time %q matches none of %q, RFC 3339 or %q", s, TimeFormat, DateFormat)
 }
 
 func (t Time) MarshalJSON() ([]byte, error) {
