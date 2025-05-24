@@ -60,6 +60,28 @@ func WithHeader(name, value string) Option {
 	}
 }
 
+// WithToken authenticates with an access token you already hold.
+func WithToken(accessToken string) Option {
+	return func(c *Client) {
+		c.tokenSource = staticToken(accessToken)
+	}
+}
+
+// WithTokenSource authenticates through a source you control.
+func WithTokenSource(src TokenSource) Option {
+	return func(c *Client) {
+		c.tokenSource = src
+	}
+}
+
+// WithCredentials logs in on the first call that needs a token and refreshes it
+// on expiry. The credentials stay in memory for the client's lifetime.
+func WithCredentials(email, password string) Option {
+	return func(c *Client) {
+		c.tokenSource = &credentials{client: c, email: email, password: password}
+	}
+}
+
 // WithUserAgent sets a custom User-Agent header
 func WithUserAgent(userAgent string) Option {
 	return func(c *Client) {

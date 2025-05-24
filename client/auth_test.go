@@ -1,0 +1,151 @@
+package client
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+// authServer answers the auth endpoints and one data endpoint, recording what
+// it was asked and what bearer it saw.
+type authServer struct {
+	logins, refreshes atomic.Int32
+	bearer            atomic.Value
+	loginExpiry       string
+}
+
+func (a *authServer) handler(t *testing.T) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case loginPath, refreshPath:
+			if got := r.Header.Get("Authorization"); got != "" {
+				t.Errorf("auth request carried Authorization %q, want none", got)
+			}
+
+			var payload map[string]string
+			body, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(body, &payload); err != nil {
+				t.Errorf("auth body %s: %v", body, err)
+			}
+
+			expiry := a.loginExpiry
+			if r.URL.Path == loginPath {
+				a.logins.Add(1)
+				if payload["email"] != "player@example.com" || payload["password"] != "hunter2" {
+					t.Errorf("login payload = %v", payload)
+				}
+			} else {
+				a.refreshes.Add(1)
+				if payload["grant_type"] != "refresh_token" {
+					t.Errorf("refresh payload = %v", payload)
+				}
+				expiry = time.Now().UTC().Add(time.Hour).Format("2006-01-02T15:04:05")
+			}
+
+			fmt.Fprintf(w, `{"access_token":"token-%d","refresh_token":"refresh-1",`+
+				`"access_token_expiration":%q,"user_id":"user-1"}`,
+				a.logins.Load()+a.refreshes.Load(), expiry)
+
+		default:
+			a.bearer.Store(r.Header.Get("Authorization"))
+			w.Write([]byte(`[]`))
+		}
+	})
+}
+
+func TestLogin(t *testing.T) {
+	a := &authServer{loginExpiry: time.Now().UTC().Add(time.Hour).Format("2006-01-02T15:04:05")}
+	srv := httptest.NewServer(a.handler(t))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	token, err := c.Login(context.Background(), "player@example.com", "hunter2")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if token.AccessToken == "" || token.RefreshToken != "refresh-1" || token.UserID != "user-1" {
+		t.Errorf("token = %+v", token)
+	}
+	if token.Expired() {
+		t.Error("a token valid for an hour should not read as expired")
+	}
+}
+
+func TestWithTokenSetsBearer(t *testing.T) {
+	a := &authServer{}
+	srv := httptest.NewServer(a.handler(t))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL), WithToken("static-token"))
+	if _, err := c.SearchClasses(context.Background(), nil); err != nil {
+		t.Fatalf("SearchClasses: %v", err)
+	}
+	if got := a.bearer.Load(); got != "Bearer static-token" {
+		t.Errorf("Authorization = %v", got)
+	}
+	if a.logins.Load() != 0 {
+		t.Error("a static token should not trigger a login")
+	}
+}
+
+func TestCredentialsLoginOnceThenReuse(t *testing.T) {
+	a := &authServer{loginExpiry: time.Now().UTC().Add(time.Hour).Format("2006-01-02T15:04:05")}
+	srv := httptest.NewServer(a.handler(t))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL), WithCredentials("player@example.com", "hunter2"))
+	for range 3 {
+		if _, err := c.SearchClasses(context.Background(), nil); err != nil {
+			t.Fatalf("SearchClasses: %v", err)
+		}
+	}
+
+	if got := a.logins.Load(); got != 1 {
+		t.Errorf("%d logins for 3 calls, want 1", got)
+	}
+	if got := a.bearer.Load(); got != "Bearer token-1" {
+		t.Errorf("Authorization = %v", got)
+	}
+}
+
+func TestCredentialsRefreshWhenExpired(t *testing.T) {
+	// Login hands back a token that is already past its expiry, so the next
+	// call has to renew rather than reuse it.
+	a := &authServer{loginExpiry: time.Now().UTC().Add(-time.Minute).Format("2006-01-02T15:04:05")}
+	srv := httptest.NewServer(a.handler(t))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL), WithCredentials("player@example.com", "hunter2"))
+	for range 2 {
+		if _, err := c.SearchClasses(context.Background(), nil); err != nil {
+			t.Fatalf("SearchClasses: %v", err)
+		}
+	}
+
+	if got := a.logins.Load(); got != 1 {
+		t.Errorf("%d logins, want 1", got)
+	}
+	if got := a.refreshes.Load(); got != 1 {
+		t.Errorf("%d refreshes, want 1", got)
+	}
+}
+
+func TestTokenExpired(t *testing.T) {
+	if !(*Token)(nil).Expired() {
+		t.Error("a nil token is expired")
+	}
+	if !(&Token{}).Expired() {
+		t.Error("a token with no access token is expired")
+	}
+
+	// No stated expiry means trust it until the API says otherwise.
+	if (&Token{AccessToken: "t"}).Expired() {
+		t.Error("a token with no expiry should not read as expired")
+	}
+}

@@ -37,6 +37,7 @@ type Client struct {
 	retryWait    time.Duration
 	maxRetryWait time.Duration
 	headers      http.Header
+	tokenSource  TokenSource
 	debug        bool
 }
 

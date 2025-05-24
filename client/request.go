@@ -52,6 +52,16 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 			req.Header[name] = values
 		}
 
+		if c.tokenSource != nil {
+			token, err := c.tokenSource.Token(ctx)
+			if err != nil {
+				return fmt.Errorf("acquiring token: %w", err)
+			}
+			if token != "" {
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
+		}
+
 		resp, err := c.httpClient.Do(req)
 		final := attempt >= c.maxRetries
 

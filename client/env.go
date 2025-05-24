@@ -17,6 +17,11 @@ const (
 	EnvTimeout   = "PLAYTOMIC_TIMEOUT"
 	EnvRetries   = "PLAYTOMIC_MAX_RETRIES"
 	EnvHeaders   = "PLAYTOMIC_HEADERS"
+
+	// Credentials. Never commit these.
+	EnvAccessToken = "PLAYTOMIC_ACCESS_TOKEN"
+	EnvEmail       = "PLAYTOMIC_EMAIL"
+	EnvPassword    = "PLAYTOMIC_PASSWORD"
 )
 
 // NewFromEnv builds a client from the PLAYTOMIC_* environment and applies opts
@@ -54,6 +59,17 @@ func NewFromEnv(opts ...Option) (*Client, error) {
 			return nil, fmt.Errorf("%s: %w", EnvHeaders, err)
 		}
 		env = append(env, headers...)
+	}
+
+	// A token beats credentials, since it costs no round trip. Half a
+	// credential pair is a mistake worth naming rather than ignoring.
+	switch token, email, password := os.Getenv(EnvAccessToken), os.Getenv(EnvEmail), os.Getenv(EnvPassword); {
+	case token != "":
+		env = append(env, WithToken(token))
+	case email != "" && password != "":
+		env = append(env, WithCredentials(email, password))
+	case email != "" || password != "":
+		return nil, fmt.Errorf("%s and %s must be set together", EnvEmail, EnvPassword)
 	}
 
 	return NewClient(append(env, opts...)...), nil
