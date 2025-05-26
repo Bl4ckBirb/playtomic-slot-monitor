@@ -22,6 +22,7 @@ func TestErrorSentinels(t *testing.T) {
 		status int
 		want   error
 	}{
+		{http.StatusBadRequest, ErrBadRequest},
 		{http.StatusUnauthorized, ErrUnauthorized},
 		{http.StatusForbidden, ErrForbidden},
 		{http.StatusNotFound, ErrNotFound},
@@ -37,8 +38,8 @@ func TestErrorSentinels(t *testing.T) {
 		}
 	}
 
-	if got := (&Error{StatusCode: http.StatusBadRequest}).Unwrap(); got != nil {
-		t.Errorf("400 unwrapped to %v, want nil", got)
+	if got := (&Error{StatusCode: http.StatusTeapot}).Unwrap(); got != nil {
+		t.Errorf("418 unwrapped to %v, want nil", got)
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 // Sentinels for the statuses worth branching on. Match them with errors.Is
 // rather than comparing StatusCode.
 var (
+	ErrBadRequest   = errors.New("bad request")
 	ErrUnauthorized = errors.New("unauthorized")
 	ErrForbidden    = errors.New("forbidden")
 	ErrNotFound     = errors.New("not found")
@@ -56,6 +57,8 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error {
 	switch {
+	case e.StatusCode == http.StatusBadRequest:
+		return ErrBadRequest
 	case e.StatusCode == http.StatusUnauthorized:
 		return ErrUnauthorized
 	case e.StatusCode == http.StatusForbidden:
