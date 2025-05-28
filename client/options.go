@@ -1,6 +1,7 @@
 package client
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -42,10 +43,13 @@ func WithBackoff(first, maxWait time.Duration) Option {
 	}
 }
 
-// WithDebug enables debug logging
-func WithDebug(enabled bool) Option {
+// WithLogger logs one record per request attempt at debug level. Headers stay
+// out of it, since they carry the bearer token.
+func WithLogger(l *slog.Logger) Option {
 	return func(c *Client) {
-		c.debug = enabled
+		if l != nil {
+			c.logger = l
+		}
 	}
 }
 

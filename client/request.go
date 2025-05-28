@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -62,7 +63,10 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 			}
 		}
 
+		start := time.Now()
 		resp, err := c.httpClient.Do(req)
+		c.log(ctx, method, reqURL, attempt, start, resp, err)
+
 		final := attempt >= c.maxRetries
 
 		if err != nil {
@@ -85,6 +89,23 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 			return err
 		}
 	}
+}
+
+func (c *Client) log(ctx context.Context, method, url string, attempt int, start time.Time, resp *http.Response, err error) {
+	attrs := []any{
+		slog.String("method", method),
+		slog.String("url", url),
+		slog.Int("attempt", attempt+1),
+		slog.Duration("took", time.Since(start)),
+	}
+	if resp != nil {
+		attrs = append(attrs, slog.Int("status", resp.StatusCode))
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any("error", err))
+	}
+
+	c.logger.DebugContext(ctx, "playtomic request", attrs...)
 }
 
 // bodyReader gives each attempt a fresh reader. A nil body must stay nil.

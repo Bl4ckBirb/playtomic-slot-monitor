@@ -82,8 +82,8 @@ client := client.NewClient(
     // Configure request retries
     client.WithRetries(3),
     
-    // Enable debug logging
-    client.WithDebug(true),
+    // Log a record per request attempt at debug level
+    client.WithLogger(slog.Default()),
     
     // Set custom User-Agent
     client.WithUserAgent("MyApp/1.0"),

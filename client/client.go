@@ -2,6 +2,7 @@
 package client
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -38,7 +39,7 @@ type Client struct {
 	maxRetryWait time.Duration
 	headers      http.Header
 	tokenSource  TokenSource
-	debug        bool
+	logger       *slog.Logger
 }
 
 // NewClient creates a new Playtomic API client with the given options
@@ -52,6 +53,7 @@ func NewClient(opts ...Option) *Client {
 		maxRetries:   DefaultMaxRetries,
 		retryWait:    DefaultRetryWait,
 		maxRetryWait: DefaultMaxRetryWait,
+		logger:       slog.New(slog.DiscardHandler),
 	}
 
 	// Apply options
