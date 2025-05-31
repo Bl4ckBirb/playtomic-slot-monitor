@@ -78,12 +78,16 @@ func (s *credentials) cached() string {
 	return s.token.AccessToken
 }
 
-// invalidate drops the cached token. Called when the API rejects it, so a
-// revoked credential does not wedge the client on a token it will keep sending.
-func (s *credentials) invalidate() {
+// invalidate drops the cached token when it is the one the API rejected, so a
+// revoked credential does not wedge the client, and a 401 arriving late for a
+// superseded token does not throw away the replacement.
+func (s *credentials) invalidate(bearer string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.token = nil
+
+	if s.token != nil && s.token.AccessToken == bearer {
+		s.token = nil
+	}
 }
 
 func (s *credentials) Token(ctx context.Context) (string, error) {

@@ -103,7 +103,7 @@ func parseHeaders(s string) ([]Option, error) {
 		if !validHeaderName(name) {
 			return nil, fmt.Errorf("%q is not a valid header name", name)
 		}
-		if strings.ContainsFunc(value, func(r rune) bool { return r < ' ' || r == 0x7f }) {
+		if strings.ContainsFunc(value, func(r rune) bool { return (r < ' ' && r != '\t') || r == 0x7f }) {
 			return nil, fmt.Errorf("header %s has a control character in its value", name)
 		}
 

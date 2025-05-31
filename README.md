@@ -106,7 +106,7 @@ for match, err := range c.AllMatches(ctx, params) {
 }
 ```
 
-The iterator stops when a page comes back short, and breaking out of the loop stops the requests. It works on a copy of your params, so your `Page` stays put.
+The iterator stops when a page comes back empty, and breaking out of the loop stops the requests. Stopping on a short page would save one request, but the server is free to cap the size you ask for, and then every walk would quietly end after the first page. It works on a copy of your params, so your `Page` stays put.
 
 ## Errors
 

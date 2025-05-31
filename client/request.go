@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -19,8 +20,9 @@ import (
 // not payload, so a server sending gigabytes cannot exhaust the client.
 const maxErrorBody = 32 << 10
 
-// maxRetryAfter saturates an absurd Retry-After rather than overflowing.
-const maxRetryAfter = 24 * time.Hour
+// maxRetryAfterSeconds is the largest whole-second delay a time.Duration can
+// hold. Beyond it the value saturates instead of wrapping.
+const maxRetryAfterSeconds = int64(math.MaxInt64) / int64(time.Second)
 
 // queryParams is satisfied by the search parameter types in models. Declared
 // here rather than there so models stays free of transport concerns.
@@ -83,7 +85,7 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 		}
 
 		if final || !retriable(method, resp.StatusCode) {
-			return c.finish(method, reqURL, resp, result)
+			return c.finish(method, reqURL, bearer, resp, result)
 		}
 
 		// Honour Retry-After in full rather than coming back early and
@@ -91,7 +93,7 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 		// response goes to the caller with RetryAfter set so they can decide.
 		wait := retryAfter(resp)
 		if wait > c.maxRetryWait {
-			return c.finish(method, reqURL, resp, result)
+			return c.finish(method, reqURL, bearer, resp, result)
 		}
 		if wait == 0 {
 			wait = c.backoff(attempt)
@@ -120,14 +122,16 @@ func (c *Client) setHeaders(req *http.Request, bearer string) {
 	}
 }
 
-// finish decodes the response and lets a managed token source know its
-// credential was rejected, so a revoked token does not wedge the client.
-func (c *Client) finish(method, url string, resp *http.Response, result any) error {
+// finish decodes the response and tells a managed token source that this
+// particular bearer was rejected, so a revoked token does not wedge the client.
+// The bearer is named because a late 401 for an old token must not discard one
+// another caller has since renewed.
+func (c *Client) finish(method, url, bearer string, resp *http.Response, result any) error {
 	err := decode(method, url, resp, result)
 
 	if errors.Is(err, ErrUnauthorized) {
-		if source, ok := c.tokenSource.(interface{ invalidate() }); ok {
-			source.invalidate()
+		if source, ok := c.tokenSource.(interface{ invalidate(string) }); ok {
+			source.invalidate(bearer)
 		}
 	}
 	return err
@@ -194,8 +198,8 @@ func retryAfter(resp *http.Response) time.Duration {
 		switch {
 		case secs <= 0:
 			return 0
-		case time.Duration(secs) > maxRetryAfter/time.Second:
-			return maxRetryAfter
+		case int64(secs) > maxRetryAfterSeconds:
+			return math.MaxInt64
 		default:
 			return time.Duration(secs) * time.Second
 		}
@@ -203,7 +207,7 @@ func retryAfter(resp *http.Response) time.Duration {
 
 	if when, err := http.ParseTime(v); err == nil {
 		if d := time.Until(when); d > 0 {
-			return min(d, maxRetryAfter)
+			return d
 		}
 	}
 

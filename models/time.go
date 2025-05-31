@@ -19,9 +19,10 @@ const DateFormat = "2006-01-02"
 type Time struct {
 	time.Time
 
-	// layout is what this value arrived in, so a date does not come back out
-	// as a timestamp and an offset is not silently dropped.
-	layout string
+	// raw is exactly what arrived. Marshalling hands the same bytes back, so a
+	// date does not become a timestamp, an offset is not dropped, and
+	// fractional seconds survive a round trip.
+	raw string
 }
 
 func (t *Time) UnmarshalJSON(b []byte) error {
@@ -38,7 +39,7 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 
 	for _, layout := range []string{TimeFormat, time.RFC3339, DateFormat} {
 		if parsed, err := time.Parse(layout, s); err == nil {
-			t.Time, t.layout = parsed, layout
+			t.Time, t.raw = parsed, s
 			return nil
 		}
 	}
@@ -46,24 +47,23 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 }
 
 func (t Time) MarshalJSON() ([]byte, error) {
+	if t.raw != "" {
+		return json.Marshal(t.raw)
+	}
 	if t.IsZero() {
 		return []byte("null"), nil
 	}
-	return []byte(`"` + t.Format(t.format()) + `"`), nil
+	return json.Marshal(t.Format(TimeFormat))
 }
 
 func (t Time) String() string {
+	if t.raw != "" {
+		return t.raw
+	}
 	if t.IsZero() {
 		return ""
 	}
-	return t.Format(t.format())
-}
-
-func (t Time) format() string {
-	if t.layout == "" {
-		return TimeFormat
-	}
-	return t.layout
+	return t.Format(TimeFormat)
 }
 
 // ParseTime parses a time string in Playtomic's format

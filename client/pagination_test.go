@@ -13,7 +13,8 @@ import (
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
-// pagedTenants serves size-2 pages: two full, then a short one to stop on.
+// pagedTenants serves size-2 pages: two full, one short, then an empty one,
+// which is what actually ends the walk.
 func pagedTenants(t *testing.T, pages *atomic.Int32) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		pages.Add(1)
