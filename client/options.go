@@ -16,10 +16,11 @@ func WithBaseURL(url string) Option {
 	}
 }
 
-// WithTimeout sets the HTTP client timeout
+// WithTimeout sets the HTTP client timeout. It is applied after every other
+// option, so it holds whether or not WithHTTPClient is also given.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Client) {
-		c.httpClient.Timeout = timeout
+		c.timeout = timeout
 	}
 }
 
@@ -82,20 +83,35 @@ func WithTokenSource(src TokenSource) Option {
 // on expiry. The credentials stay in memory for the client's lifetime.
 func WithCredentials(email, password string) Option {
 	return func(c *Client) {
-		c.tokenSource = &credentials{client: c, email: email, password: password}
+		c.tokenSource = newCredentials(c, email, password)
 	}
 }
 
-// WithUserAgent sets a custom User-Agent header
+// WithUserAgent sets a custom User-Agent header. It is a header like any
+// other, so the last option to name it wins.
 func WithUserAgent(userAgent string) Option {
+	return WithHeader("User-Agent", userAgent)
+}
+
+// WithAuthPaths overrides the login and refresh endpoints. Empty values keep
+// the defaults. Here so a moved endpoint needs no release.
+func WithAuthPaths(login, refresh string) Option {
 	return func(c *Client) {
-		c.userAgent = userAgent
+		if login != "" {
+			c.loginPath = login
+		}
+		if refresh != "" {
+			c.refreshPath = refresh
+		}
 	}
 }
 
-// WithHTTPClient sets a custom HTTP client
+// WithHTTPClient sets a custom HTTP client. A nil client is ignored rather
+// than left to panic on the first request.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) {
-		c.httpClient = httpClient
+		if httpClient != nil {
+			c.httpClient = httpClient
+		}
 	}
 }

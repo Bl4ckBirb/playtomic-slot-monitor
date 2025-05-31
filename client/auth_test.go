@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
 // authServer answers the auth endpoints and one data endpoint, recording what
@@ -23,7 +26,7 @@ type authServer struct {
 func (a *authServer) handler(t *testing.T) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case loginPath, refreshPath:
+		case DefaultLoginPath, DefaultRefreshPath:
 			if got := r.Header.Get("Authorization"); got != "" {
 				t.Errorf("auth request carried Authorization %q, want none", got)
 			}
@@ -35,7 +38,7 @@ func (a *authServer) handler(t *testing.T) http.Handler {
 			}
 
 			expiry := a.loginExpiry
-			if r.URL.Path == loginPath {
+			if r.URL.Path == DefaultLoginPath {
 				a.logins.Add(1)
 				if payload["email"] != "player@example.com" || payload["password"] != "hunter2" {
 					t.Errorf("login payload = %v", payload)
@@ -115,17 +118,24 @@ func TestCredentialsLoginOnceThenReuse(t *testing.T) {
 }
 
 func TestCredentialsRefreshWhenExpired(t *testing.T) {
-	// Login hands back a token that is already past its expiry, so the next
-	// call has to renew rather than reuse it.
-	a := &authServer{loginExpiry: time.Now().UTC().Add(-time.Minute).Format("2006-01-02T15:04:05")}
+	a := &authServer{loginExpiry: time.Now().UTC().Add(time.Hour).Format("2006-01-02T15:04:05")}
 	srv := httptest.NewServer(a.handler(t))
 	defer srv.Close()
 
 	c := NewClient(WithBaseURL(srv.URL), WithCredentials("player@example.com", "hunter2"))
-	for range 2 {
-		if _, err := c.SearchClasses(context.Background(), nil); err != nil {
-			t.Fatalf("SearchClasses: %v", err)
-		}
+	if _, err := c.SearchClasses(context.Background(), nil); err != nil {
+		t.Fatalf("SearchClasses: %v", err)
+	}
+
+	// Age the cached token rather than have the server issue a dead one, which
+	// is a different failure and is rejected outright.
+	source := c.tokenSource.(*credentials)
+	source.mu.Lock()
+	source.token.ExpiresAt = models.Time{Time: time.Now().UTC().Add(-time.Minute)}
+	source.mu.Unlock()
+
+	if _, err := c.SearchClasses(context.Background(), nil); err != nil {
+		t.Fatalf("SearchClasses after expiry: %v", err)
 	}
 
 	if got := a.logins.Load(); got != 1 {
@@ -133,6 +143,18 @@ func TestCredentialsRefreshWhenExpired(t *testing.T) {
 	}
 	if got := a.refreshes.Load(); got != 1 {
 		t.Errorf("%d refreshes, want 1", got)
+	}
+}
+
+// A token that arrives already expired would loop forever, so it is refused.
+func TestCredentialsRejectDeadToken(t *testing.T) {
+	a := &authServer{loginExpiry: time.Now().UTC().Add(-time.Hour).Format("2006-01-02T15:04:05")}
+	srv := httptest.NewServer(a.handler(t))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL), WithCredentials("player@example.com", "hunter2"))
+	if _, err := c.SearchClasses(context.Background(), nil); err == nil {
+		t.Fatal("expected a token that is already expired to be refused")
 	}
 }
 
@@ -147,5 +169,74 @@ func TestTokenExpired(t *testing.T) {
 	// No stated expiry means trust it until the API says otherwise.
 	if (&Token{AccessToken: "t"}).Expired() {
 		t.Error("a token with no expiry should not read as expired")
+	}
+}
+
+func TestCredentialsInvalidateOn401(t *testing.T) {
+	var logins atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == DefaultLoginPath {
+			logins.Add(1)
+			fmt.Fprintf(w, `{"access_token":"token-%d","access_token_expiration":%q}`,
+				logins.Load(), time.Now().UTC().Add(time.Hour).Format("2006-01-02T15:04:05"))
+			return
+		}
+		// The API has revoked it, so the cached token must not be reused.
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL), WithCredentials("player@example.com", "hunter2"))
+	for range 2 {
+		if _, err := c.SearchClasses(context.Background(), nil); !errors.Is(err, ErrUnauthorized) {
+			t.Fatalf("got %v, want ErrUnauthorized", err)
+		}
+	}
+
+	if got := logins.Load(); got != 2 {
+		t.Errorf("%d logins, want 2: a rejected token should be dropped", got)
+	}
+}
+
+func TestAuthRequestsDropConfiguredAuthorization(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("login carried Authorization %q, want none", got)
+		}
+		fmt.Fprint(w, `{"access_token":"t"}`)
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL), WithHeader("Authorization", "Bearer stale"))
+	if _, err := c.Login(context.Background(), "player@example.com", "hunter2"); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+}
+
+func TestTokenSourceRespectsContextWhileAnotherRenews(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-release
+		fmt.Fprint(w, `{"access_token":"t"}`)
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	c := NewClient(WithBaseURL(srv.URL), WithCredentials("player@example.com", "hunter2"))
+	source := c.tokenSource
+
+	// First caller occupies the gate and blocks on the server.
+	started := make(chan struct{})
+	go func() {
+		close(started)
+		_, _ = source.Token(context.Background())
+	}()
+	<-started
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	if _, err := source.Token(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("got %v, want the waiter to give up on its own deadline", err)
 	}
 }

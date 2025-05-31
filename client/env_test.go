@@ -13,15 +13,15 @@ func TestNewFromEnv(t *testing.T) {
 	t.Setenv(EnvUserAgent, "padel-bot/2.0")
 	t.Setenv(EnvTimeout, "5s")
 	t.Setenv(EnvRetries, "7")
-	t.Setenv(EnvHeaders, "X-App-Token: abc123, X-Client: ios")
+	t.Setenv(EnvHeaders, "X-App-Token: abc123\nX-Client: ios")
 
 	c, err := NewFromEnv()
 	if err != nil {
 		t.Fatalf("NewFromEnv: %v", err)
 	}
 
-	if c.baseURL != "https://example.test" || c.userAgent != "padel-bot/2.0" {
-		t.Errorf("baseURL = %q, userAgent = %q", c.baseURL, c.userAgent)
+	if c.baseURL != "https://example.test" || c.headers.Get("User-Agent") != "padel-bot/2.0" {
+		t.Errorf("baseURL = %q, userAgent = %q", c.baseURL, c.headers.Get("User-Agent"))
 	}
 	if c.httpClient.Timeout != 5*time.Second || c.maxRetries != 7 {
 		t.Errorf("timeout = %v, retries = %d", c.httpClient.Timeout, c.maxRetries)
@@ -52,6 +52,8 @@ func TestNewFromEnvRejectsBadValues(t *testing.T) {
 		{"retries", EnvRetries, "lots"},
 		{"headers", EnvHeaders, "no colon here"},
 		{"header name", EnvHeaders, ": orphaned"},
+		{"header name token", EnvHeaders, "Bad Name: value"},
+		{"header value control", EnvHeaders, "X-Ok: va\x7flue"},
 	}
 
 	for _, tt := range tests {

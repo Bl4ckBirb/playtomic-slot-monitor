@@ -18,6 +18,10 @@ const (
 	EnvRetries   = "PLAYTOMIC_MAX_RETRIES"
 	EnvHeaders   = "PLAYTOMIC_HEADERS"
 
+	// Auth endpoints, in case the API moves them.
+	EnvLoginPath   = "PLAYTOMIC_LOGIN_PATH"
+	EnvRefreshPath = "PLAYTOMIC_REFRESH_PATH"
+
 	// Credentials. Never commit these.
 	EnvAccessToken = "PLAYTOMIC_ACCESS_TOKEN"
 	EnvEmail       = "PLAYTOMIC_EMAIL"
@@ -61,6 +65,10 @@ func NewFromEnv(opts ...Option) (*Client, error) {
 		env = append(env, headers...)
 	}
 
+	if login, refresh := os.Getenv(EnvLoginPath), os.Getenv(EnvRefreshPath); login != "" || refresh != "" {
+		env = append(env, WithAuthPaths(login, refresh))
+	}
+
 	// A token beats credentials, since it costs no round trip. Half a
 	// credential pair is a mistake worth naming rather than ignoring.
 	switch token, email, password := os.Getenv(EnvAccessToken), os.Getenv(EnvEmail), os.Getenv(EnvPassword); {
@@ -75,23 +83,47 @@ func NewFromEnv(opts ...Option) (*Client, error) {
 	return NewClient(append(env, opts...)...), nil
 }
 
-// parseHeaders reads "Name: value" pairs separated by newlines or commas, which
-// is close enough to how a proxy prints them to paste straight in.
+// parseHeaders reads one "Name: value" pair per line, the way a proxy prints
+// them, so a value containing a comma survives.
 func parseHeaders(s string) ([]Option, error) {
 	var opts []Option
 
-	for _, field := range strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == ',' }) {
-		name, value, ok := strings.Cut(field, ":")
-		if !ok {
-			return nil, fmt.Errorf("%q is not a Name: value pair", strings.TrimSpace(field))
+	for line := range strings.SplitSeq(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
 		}
 
-		name = strings.TrimSpace(name)
-		if name == "" {
-			return nil, fmt.Errorf("empty header name in %q", strings.TrimSpace(field))
+		name, value, ok := strings.Cut(line, ":")
+		if !ok {
+			return nil, fmt.Errorf("%q is not a Name: value pair", line)
 		}
-		opts = append(opts, WithHeader(name, strings.TrimSpace(value)))
+
+		name, value = strings.TrimSpace(name), strings.TrimSpace(value)
+		if !validHeaderName(name) {
+			return nil, fmt.Errorf("%q is not a valid header name", name)
+		}
+		if strings.ContainsFunc(value, func(r rune) bool { return r < ' ' || r == 0x7f }) {
+			return nil, fmt.Errorf("header %s has a control character in its value", name)
+		}
+
+		opts = append(opts, WithHeader(name, value))
 	}
 
 	return opts, nil
+}
+
+// validHeaderName is RFC 9110's token rule. Checked here so a typo fails at
+// construction rather than on the first request.
+func validHeaderName(s string) bool {
+	if s == "" {
+		return false
+	}
+
+	for _, r := range s {
+		if r <= ' ' || r >= 0x7f || strings.ContainsRune(":()<>@,;\\\"/[]?={}", r) {
+			return false
+		}
+	}
+	return true
 }

@@ -74,7 +74,8 @@ c, err := client.NewFromEnv()
 | `PLAYTOMIC_USER_AGENT` | `User-Agent` header |
 | `PLAYTOMIC_TIMEOUT` | Go duration, such as `15s` |
 | `PLAYTOMIC_MAX_RETRIES` | Retry budget per request |
-| `PLAYTOMIC_HEADERS` | Extra headers as `Name: value`, separated by commas or newlines |
+| `PLAYTOMIC_HEADERS` | Extra headers, one `Name: value` per line |
+| `PLAYTOMIC_LOGIN_PATH`, `PLAYTOMIC_REFRESH_PATH` | Auth endpoints, if they move |
 | `PLAYTOMIC_ACCESS_TOKEN` | Bearer token |
 | `PLAYTOMIC_EMAIL`, `PLAYTOMIC_PASSWORD` | Credentials to log in with |
 
@@ -92,7 +93,7 @@ client.WithTokenSource(mySource)           // your own storage
 
 `WithCredentials` logs in on the first call that needs a token and refreshes it before expiry. Concurrent callers on a cold client produce one login between them, not one each.
 
-`Login` and `Refresh` are exported if you would rather hold the token yourself.
+`Login` and `Refresh` are exported if you would rather hold the token yourself. A rejected token is dropped, so a revoked credential recovers on the next call rather than wedging the client.
 
 ## Pagination
 
@@ -129,7 +130,11 @@ case err != nil:
 
 ## Retries
 
-Transport failures and 429 are retried, 5xx only on idempotent methods, and 501 never. The window doubles per attempt and lands in its upper half so a fleet of clients does not resynchronise on one outage. A `Retry-After` from the server overrides that, capped by `WithBackoff`.
+Only idempotent methods are retried, on transport failures, 429 and 5xx, never
+501. A POST is never replayed. The window doubles per attempt and lands in its
+upper half, so a fleet of clients does not resynchronise on one outage.
+
+A `Retry-After` is honoured in full rather than shortened. If the server asks for longer than the cap set by `WithBackoff`, the response comes back to you with `Error.RetryAfter` set instead of being retried early.
 
 ## Times
 

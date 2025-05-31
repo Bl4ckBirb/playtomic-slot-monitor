@@ -11,13 +11,6 @@ import (
 	"github.com/rafa-garcia/go-playtomic-api/models"
 )
 
-// Auth endpoints. They sit under /v3 while everything else is /v1, which is why
-// the client is based on the host rather than a version prefix.
-const (
-	loginPath   = "/v3/auth/login"
-	refreshPath = "/v3/auth/token"
-)
-
 // tokenMargin renews slightly early so a token cannot expire mid-flight.
 const tokenMargin = 30 * time.Second
 
@@ -57,42 +50,97 @@ type credentials struct {
 	email    string
 	password string
 
+	// gate serialises renewal. A channel rather than a mutex, so a caller
+	// whose context dies while another is mid-login can leave instead of
+	// blocking uninterruptibly on Lock.
+	gate chan struct{}
+
 	mu    sync.Mutex
 	token *Token
 }
 
-// Token holds the lock across the network call on purpose: concurrent callers
-// finding an expired token should produce one login, not one each.
-func (s *credentials) Token(ctx context.Context) (string, error) {
+func newCredentials(c *Client, email, password string) *credentials {
+	return &credentials{
+		client:   c,
+		email:    email,
+		password: password,
+		gate:     make(chan struct{}, 1),
+	}
+}
+
+func (s *credentials) cached() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !s.token.Expired() {
-		return s.token.AccessToken, nil
+	if s.token.Expired() {
+		return ""
+	}
+	return s.token.AccessToken
+}
+
+// invalidate drops the cached token. Called when the API rejects it, so a
+// revoked credential does not wedge the client on a token it will keep sending.
+func (s *credentials) invalidate() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.token = nil
+}
+
+func (s *credentials) Token(ctx context.Context) (string, error) {
+	if token := s.cached(); token != "" {
+		return token, nil
 	}
 
-	if s.token != nil && s.token.RefreshToken != "" {
-		// A refresh token the server has already retired is not fatal here.
-		if token, err := s.client.Refresh(ctx, s.token.RefreshToken); err == nil {
-			s.token = token
-			return token.AccessToken, nil
-		}
+	select {
+	case s.gate <- struct{}{}:
+		defer func() { <-s.gate }()
+	case <-ctx.Done():
+		return "", ctx.Err()
 	}
 
-	token, err := s.client.Login(ctx, s.email, s.password)
+	// Someone may have renewed it while we were waiting for the gate.
+	if token := s.cached(); token != "" {
+		return token, nil
+	}
+
+	token, err := s.renew(ctx)
 	if err != nil {
 		return "", err
 	}
 
+	// A token that arrives already expired would send us straight back here on
+	// the next call, forever.
+	if token.Expired() {
+		return "", fmt.Errorf("playtomic returned a token that is already expired")
+	}
+
+	s.mu.Lock()
 	s.token = token
+	s.mu.Unlock()
+
 	return token.AccessToken, nil
+}
+
+func (s *credentials) renew(ctx context.Context) (*Token, error) {
+	s.mu.Lock()
+	previous := s.token
+	s.mu.Unlock()
+
+	if previous != nil && previous.RefreshToken != "" {
+		// A refresh token the server has already retired is not fatal here.
+		if token, err := s.client.Refresh(ctx, previous.RefreshToken); err == nil {
+			return token, nil
+		}
+	}
+
+	return s.client.Login(ctx, s.email, s.password)
 }
 
 // Login exchanges credentials for a token. It leaves the client's own
 // authentication alone: pass the result to WithToken, or use WithCredentials
 // and let the client manage the lifecycle.
 func (c *Client) Login(ctx context.Context, email, password string) (*Token, error) {
-	return c.authenticate(ctx, loginPath, map[string]string{
+	return c.authenticate(ctx, c.loginPath, map[string]string{
 		"email":    email,
 		"password": password,
 	})
@@ -100,7 +148,7 @@ func (c *Client) Login(ctx context.Context, email, password string) (*Token, err
 
 // Refresh trades a refresh token for a fresh pair.
 func (c *Client) Refresh(ctx context.Context, refreshToken string) (*Token, error) {
-	return c.authenticate(ctx, refreshPath, map[string]string{
+	return c.authenticate(ctx, c.refreshPath, map[string]string{
 		"grant_type":    "refresh_token",
 		"refresh_token": refreshToken,
 	})
@@ -113,8 +161,14 @@ func (c *Client) authenticate(ctx context.Context, path string, payload map[stri
 	}
 
 	// A copy with no token source, so acquiring a token cannot ask for one.
+	// A configured Authorization header goes too: the auth endpoints are what
+	// produce authorization, they must not consume it.
 	bare := *c
 	bare.tokenSource = nil
+	if bare.headers.Get("Authorization") != "" {
+		bare.headers = bare.headers.Clone()
+		bare.headers.Del("Authorization")
+	}
 
 	var token Token
 	if err := bare.sendRequest(ctx, http.MethodPost, path, "", body, &token); err != nil {

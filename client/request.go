@@ -107,18 +107,16 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 func (c *Client) setHeaders(req *http.Request, bearer string) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("User-Agent", DefaultUserAgent)
 
+	// Configured headers land last, so WithUserAgent and PLAYTOMIC_HEADERS
+	// resolve by option order rather than by which field they happened to set.
 	for name, values := range c.headers {
 		req.Header[name] = values
 	}
 
-	// Authorization is owned by the auth options. A bare auth request carries
-	// none, so a configured one must not leak in through WithHeader.
 	if bearer != "" {
 		req.Header.Set("Authorization", "Bearer "+bearer)
-	} else if c.tokenSource == nil {
-		req.Header.Del("Authorization")
 	}
 }
 
