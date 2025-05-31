@@ -21,8 +21,8 @@ var (
 	ErrRateLimited  = errors.New("rate limited")
 	ErrServer       = errors.New("server error")
 
-	// ErrMissingID guards the by-ID calls, which would otherwise request the
-	// collection and decode a list into a single value.
+	// ErrMissingID guards the by-ID calls, which would otherwise fetch the
+	// collection.
 	ErrMissingID = errors.New("missing id")
 )
 
@@ -49,8 +49,8 @@ func (e *Error) Error() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "playtomic: %s %s: %d ", e.Method, e.URL, e.StatusCode)
 
-	// Falling back to the body matters: an edge that blocks the request never
-	// speaks the API's error envelope, and the status alone says nothing.
+	// The body matters: whatever blocks a request upstream never speaks the
+	// API's error envelope.
 	b.WriteString(cmp.Or(e.Message, e.Body, http.StatusText(e.StatusCode)))
 
 	if e.RequestID != "" {
@@ -82,8 +82,8 @@ func (e *Error) Unwrap() error {
 	}
 }
 
-// newError takes the method and URL as arguments rather than reading
-// resp.Request, which a custom RoundTripper is free to leave nil.
+// newError takes method and URL rather than reading resp.Request, which a
+// custom RoundTripper may leave nil.
 func newError(method, url string, resp *http.Response, body []byte) *Error {
 	e := &Error{
 		Method:     method,
@@ -118,9 +118,8 @@ func requestID(resp *http.Response) string {
 
 var htmlTag = regexp.MustCompile(`(?s)<[^>]*>`)
 
-// snippet flattens the body to one line. A body that starts with a tag came
-// from something upstream of the API, and only the prose inside it is worth
-// keeping.
+// snippet flattens the body to one line. A leading tag means markup, and only
+// the prose inside is worth keeping.
 func snippet(b []byte) string {
 	s := strings.TrimSpace(string(b))
 	if strings.HasPrefix(s, "<") {

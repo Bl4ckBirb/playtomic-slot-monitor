@@ -9,19 +9,15 @@ import (
 // TimeFormat is the standard time format used by Playtomic API
 const TimeFormat = "2006-01-02T15:04:05"
 
-// DateFormat is the layout for the endpoints that carry a day rather than an
-// instant, such as availability.
+// DateFormat is for endpoints carrying a day rather than an instant.
 const DateFormat = "2006-01-02"
 
-// Time is an API timestamp. The API sends wall-clock times with no zone, so a
-// parsed value reads as UTC and only the tenant's Address.Timezone turns it
-// into a real instant. A date-only value parses to midnight.
+// Time is an API timestamp. The API sends wall-clock times with no zone, so
+// only a tenant's Address.Timezone makes one a real instant.
 type Time struct {
 	time.Time
 
-	// raw is exactly what arrived. Marshalling hands the same bytes back, so a
-	// date does not become a timestamp, an offset is not dropped, and
-	// fractional seconds survive a round trip.
+	// raw is what arrived, so marshalling hands the same bytes back.
 	raw string
 }
 

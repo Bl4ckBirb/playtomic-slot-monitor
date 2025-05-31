@@ -16,8 +16,7 @@ func WithBaseURL(url string) Option {
 	}
 }
 
-// WithTimeout sets the HTTP client timeout. It is applied after every other
-// option, so it holds whether or not WithHTTPClient is also given.
+// WithTimeout sets the HTTP client timeout, applied after every other option.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Client) {
 		c.timeout = timeout
@@ -44,8 +43,8 @@ func WithBackoff(first, maxWait time.Duration) Option {
 	}
 }
 
-// WithLogger logs one record per request attempt at debug level. Headers stay
-// out of it, since they carry the bearer token.
+// WithLogger logs one record per attempt at debug level. Headers stay out:
+// one of them is the bearer.
 func WithLogger(l *slog.Logger) Option {
 	return func(c *Client) {
 		if l != nil {
@@ -55,7 +54,6 @@ func WithLogger(l *slog.Logger) Option {
 }
 
 // WithHeader sets a request header, overriding a default of the same name.
-// A header the API starts demanding can be supplied without a release.
 func WithHeader(name, value string) Option {
 	return func(c *Client) {
 		if c.headers == nil {
@@ -79,22 +77,20 @@ func WithTokenSource(src TokenSource) Option {
 	}
 }
 
-// WithCredentials logs in on the first call that needs a token and refreshes it
-// on expiry. The credentials stay in memory for the client's lifetime.
+// WithCredentials logs in on first need and refreshes on expiry.
 func WithCredentials(email, password string) Option {
 	return func(c *Client) {
 		c.tokenSource = newCredentials(c, email, password)
 	}
 }
 
-// WithUserAgent sets a custom User-Agent header. It is a header like any
-// other, so the last option to name it wins.
+// WithUserAgent sets the User-Agent. A header like any other, so the last
+// option naming it wins.
 func WithUserAgent(userAgent string) Option {
 	return WithHeader("User-Agent", userAgent)
 }
 
-// WithAuthPaths overrides the login and refresh endpoints. Empty values keep
-// the defaults. Here so a moved endpoint needs no release.
+// WithAuthPaths overrides the auth endpoints. Empty values keep the defaults.
 func WithAuthPaths(login, refresh string) Option {
 	return func(c *Client) {
 		if login != "" {
@@ -106,8 +102,7 @@ func WithAuthPaths(login, refresh string) Option {
 	}
 }
 
-// WithHTTPClient sets a custom HTTP client. A nil client is ignored rather
-// than left to panic on the first request.
+// WithHTTPClient sets a custom HTTP client. A nil client is ignored.
 func WithHTTPClient(httpClient *http.Client) Option {
 	return func(c *Client) {
 		if httpClient != nil {

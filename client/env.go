@@ -8,9 +8,8 @@ import (
 	"time"
 )
 
-// Environment variables NewFromEnv reads. Anything deployment-specific belongs
-// here rather than in the source, so a moved host or a newly required header
-// costs a redeploy and not a release.
+// Environment variables NewFromEnv reads. Deployment-specific values belong
+// here, not in source, so a moved host costs a redeploy and not a release.
 const (
 	EnvBaseURL   = "PLAYTOMIC_BASE_URL"
 	EnvUserAgent = "PLAYTOMIC_USER_AGENT"
@@ -28,9 +27,8 @@ const (
 	EnvPassword    = "PLAYTOMIC_PASSWORD"
 )
 
-// NewFromEnv builds a client from the PLAYTOMIC_* environment and applies opts
-// on top, so an explicit option still wins. An unset variable keeps its
-// default. A set but unusable one is an error, not a silent fallback.
+// NewFromEnv reads the PLAYTOMIC_* environment then applies opts, so an
+// explicit option wins. A set but unusable variable is an error.
 func NewFromEnv(opts ...Option) (*Client, error) {
 	var env []Option
 
@@ -69,8 +67,7 @@ func NewFromEnv(opts ...Option) (*Client, error) {
 		env = append(env, WithAuthPaths(login, refresh))
 	}
 
-	// A token beats credentials, since it costs no round trip. Half a
-	// credential pair is a mistake worth naming rather than ignoring.
+	// A token beats credentials. Half a pair is a mistake worth naming.
 	switch token, email, password := os.Getenv(EnvAccessToken), os.Getenv(EnvEmail), os.Getenv(EnvPassword); {
 	case token != "":
 		env = append(env, WithToken(token))
@@ -83,8 +80,7 @@ func NewFromEnv(opts ...Option) (*Client, error) {
 	return NewClient(append(env, opts...)...), nil
 }
 
-// parseHeaders reads one "Name: value" pair per line, the way a proxy prints
-// them, so a value containing a comma survives.
+// parseHeaders reads one "Name: value" per line, so a comma in a value survives.
 func parseHeaders(s string) ([]Option, error) {
 	var opts []Option
 
@@ -113,8 +109,7 @@ func parseHeaders(s string) ([]Option, error) {
 	return opts, nil
 }
 
-// validHeaderName is RFC 9110's token rule. Checked here so a typo fails at
-// construction rather than on the first request.
+// validHeaderName is RFC 9110's token rule, checked at construction.
 func validHeaderName(s string) bool {
 	if s == "" {
 		return false

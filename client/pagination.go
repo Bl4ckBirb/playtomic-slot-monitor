@@ -10,11 +10,8 @@ import (
 // DefaultPageSize is what the All iterators ask for when params leave Size unset.
 const DefaultPageSize = 100
 
-// paginate walks pages until one comes back empty. Stopping on a short page
-// would be one request cheaper, but the server is free to cap the size we ask
-// for, and then every walk would quietly stop after page zero. A failure yields
-// the zero value with the error once and ends the sequence, so a caller that
-// ignores the error still terminates.
+// paginate walks until an empty page. A short page is not the end: the server
+// may cap the size we asked for. An error yields once, then stops.
 func paginate[T any](ctx context.Context, fetch func(context.Context, int) ([]T, error)) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {
 		var zero T

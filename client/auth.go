@@ -22,8 +22,8 @@ type Token struct {
 	UserID       string      `json:"user_id"`
 }
 
-// Expired reports whether the token needs replacing. A token with no stated
-// expiry is taken at face value until the API rejects it.
+// Expired reports whether the token needs replacing. No stated expiry means
+// trust it until the API says otherwise.
 func (t *Token) Expired() bool {
 	if t == nil || t.AccessToken == "" {
 		return true
@@ -34,8 +34,8 @@ func (t *Token) Expired() bool {
 	return time.Now().UTC().After(t.ExpiresAt.Add(-tokenMargin))
 }
 
-// TokenSource supplies the bearer token for a request. Implement it to hold
-// tokens somewhere this library does not need to know about.
+// TokenSource supplies the bearer token. Implement it to keep tokens somewhere
+// this library need not know about.
 type TokenSource interface {
 	Token(ctx context.Context) (string, error)
 }
@@ -50,9 +50,8 @@ type credentials struct {
 	email    string
 	password string
 
-	// gate serialises renewal. A channel rather than a mutex, so a caller
-	// whose context dies while another is mid-login can leave instead of
-	// blocking uninterruptibly on Lock.
+	// gate serialises renewal. A channel, not a mutex, so a waiter can leave
+	// when its own context dies.
 	gate chan struct{}
 
 	mu    sync.Mutex
@@ -78,9 +77,7 @@ func (s *credentials) cached() string {
 	return s.token.AccessToken
 }
 
-// invalidate drops the cached token when it is the one the API rejected, so a
-// revoked credential does not wedge the client, and a 401 arriving late for a
-// superseded token does not throw away the replacement.
+// invalidate clears the token only when it is the one that was rejected.
 func (s *credentials) invalidate(bearer string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -112,8 +109,7 @@ func (s *credentials) Token(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// A token that arrives already expired would send us straight back here on
-	// the next call, forever.
+	// Otherwise we come straight back here, forever.
 	if token.Expired() {
 		return "", fmt.Errorf("playtomic returned a token that is already expired")
 	}
@@ -140,9 +136,8 @@ func (s *credentials) renew(ctx context.Context) (*Token, error) {
 	return s.client.Login(ctx, s.email, s.password)
 }
 
-// Login exchanges credentials for a token. It leaves the client's own
-// authentication alone: pass the result to WithToken, or use WithCredentials
-// and let the client manage the lifecycle.
+// Login exchanges credentials for a token. It does not change the client's own
+// authentication: for that use WithToken or WithCredentials.
 func (c *Client) Login(ctx context.Context, email, password string) (*Token, error) {
 	return c.authenticate(ctx, c.loginPath, map[string]string{
 		"email":    email,
@@ -164,9 +159,8 @@ func (c *Client) authenticate(ctx context.Context, path string, payload map[stri
 		return nil, fmt.Errorf("encoding credentials: %w", err)
 	}
 
-	// A copy with no token source, so acquiring a token cannot ask for one.
-	// A configured Authorization header goes too: the auth endpoints are what
-	// produce authorization, they must not consume it.
+	// No token source and no Authorization: these endpoints produce
+	// authorization, they do not consume it.
 	bare := *c
 	bare.tokenSource = nil
 	if bare.headers.Get("Authorization") != "" {

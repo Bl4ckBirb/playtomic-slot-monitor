@@ -8,8 +8,7 @@ import (
 )
 
 const (
-	// DefaultBaseURL is the Playtomic API host. Version prefixes belong to
-	// the endpoint paths, since the API mixes v1 and v3.
+	// DefaultBaseURL is the API host. Version prefixes live in the paths.
 	DefaultBaseURL = "https://api.playtomic.io"
 
 	// DefaultTimeout is the default client timeout
@@ -21,17 +20,14 @@ const (
 	// DefaultUserAgent is the default User-Agent sent with requests
 	DefaultUserAgent = "PlaytomicGoClient/1.0"
 
-	// DefaultLoginPath and DefaultRefreshPath are the auth endpoints. They sit
-	// under /v3 while the rest of the API is /v1, which is why the client is
-	// based on the host rather than a version prefix.
+	// Auth sits under /v3 while the rest of the API is /v1.
 	DefaultLoginPath   = "/v3/auth/login"
 	DefaultRefreshPath = "/v3/auth/token"
 
 	// DefaultRetryWait is the first backoff window. It doubles per attempt.
 	DefaultRetryWait = 500 * time.Millisecond
 
-	// DefaultMaxRetryWait caps a single wait, including one the server asked
-	// for through Retry-After.
+	// DefaultMaxRetryWait caps a single wait.
 	DefaultMaxRetryWait = 10 * time.Second
 )
 
@@ -69,9 +65,8 @@ func NewClient(opts ...Option) *Client {
 		opt(c)
 	}
 
-	// The timeout lands on a copy after every option has run, so WithTimeout
-	// and WithHTTPClient no longer depend on which came last, and the caller's
-	// own client is left alone.
+	// After all options, so WithTimeout and WithHTTPClient cannot fight, and
+	// the caller's own client is left alone.
 	httpClient := *c.httpClient
 	httpClient.Timeout = c.timeout
 	c.httpClient = &httpClient

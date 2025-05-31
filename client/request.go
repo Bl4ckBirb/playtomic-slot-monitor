@@ -16,22 +16,19 @@ import (
 	"time"
 )
 
-// maxErrorBody bounds what is read from a failed response. It is diagnostic,
-// not payload, so a server sending gigabytes cannot exhaust the client.
+// maxErrorBody bounds a failed response: it is diagnostic, not payload.
 const maxErrorBody = 32 << 10
 
-// maxRetryAfterSeconds is the largest whole-second delay a time.Duration can
-// hold. Beyond it the value saturates instead of wrapping.
+// maxRetryAfterSeconds is the largest whole-second delay a Duration holds.
 const maxRetryAfterSeconds = int64(math.MaxInt64) / int64(time.Second)
 
-// queryParams is satisfied by the search parameter types in models. Declared
-// here rather than there so models stays free of transport concerns.
+// queryParams lives here, not in models, to keep transport out of models.
 type queryParams interface {
 	ToURLValues() url.Values
 }
 
-// get fetches path into a T. params may be a nil pointer inside a non-nil
-// interface, which is why every ToURLValues tolerates a nil receiver.
+// get fetches path into a T. A nil params arrives non-nil here, hence the
+// nil-safe ToURLValues.
 func get[T any](ctx context.Context, c *Client, path string, params queryParams) (T, error) {
 	var out T
 	var query string
@@ -50,8 +47,7 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 		reqURL += "?" + query
 	}
 
-	// One acquisition per logical call. Doing it per attempt would call a
-	// user's TokenSource maxRetries+1 times for one request.
+	// Once per call. Per attempt would hit a user's TokenSource maxRetries+1 times.
 	var bearer string
 	if c.tokenSource != nil {
 		token, err := c.tokenSource.Token(ctx)
@@ -88,9 +84,8 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 			return c.finish(method, reqURL, bearer, resp, result)
 		}
 
-		// Honour Retry-After in full rather than coming back early and
-		// deepening the throttle. Asked for longer than we will wait, the
-		// response goes to the caller with RetryAfter set so they can decide.
+		// Honour it in full. Coming back early only deepens the throttle, and
+		// a wait we will not sit through goes to the caller to decide.
 		wait := retryAfter(resp)
 		if wait > c.maxRetryWait {
 			return c.finish(method, reqURL, bearer, resp, result)
@@ -111,8 +106,7 @@ func (c *Client) setHeaders(req *http.Request, bearer string) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", DefaultUserAgent)
 
-	// Configured headers land last, so WithUserAgent and PLAYTOMIC_HEADERS
-	// resolve by option order rather than by which field they happened to set.
+	// Last, so precedence is option order.
 	for name, values := range c.headers {
 		req.Header[name] = values
 	}
@@ -122,10 +116,8 @@ func (c *Client) setHeaders(req *http.Request, bearer string) {
 	}
 }
 
-// finish decodes the response and tells a managed token source that this
-// particular bearer was rejected, so a revoked token does not wedge the client.
-// The bearer is named because a late 401 for an old token must not discard one
-// another caller has since renewed.
+// finish names the bearer so a late 401 for an old token cannot discard the
+// newer one another caller just fetched.
 func (c *Client) finish(method, url, bearer string, resp *http.Response, result any) error {
 	err := decode(method, url, resp, result)
 
@@ -145,8 +137,7 @@ func bodyReader(body []byte) io.Reader {
 	return bytes.NewReader(body)
 }
 
-// idempotent reports whether a method survives replay after a failure that may
-// already have reached the server.
+// idempotent reports whether a method survives replay.
 func idempotent(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodPut,
@@ -157,9 +148,8 @@ func idempotent(method string) bool {
 	}
 }
 
-// retriable never replays a non-idempotent request: a 429 usually means the
-// server refused it, but nothing in the response proves it. 501 is a permanent
-// refusal wearing a 5xx.
+// retriable never replays a non-idempotent request. 501 is a permanent refusal
+// wearing a 5xx.
 func retriable(method string, status int) bool {
 	if !idempotent(method) {
 		return false
@@ -168,10 +158,8 @@ func retriable(method string, status int) bool {
 		(status >= 500 && status != http.StatusNotImplemented)
 }
 
-// backoff doubles the window per attempt and lands in its upper half, so
-// clients that all got the same 503 do not come back in step. Doubling in a
-// loop rather than shifting, because a shift wraps at high attempt counts and
-// can wrap to a positive value small enough to pass a bounds check.
+// backoff doubles per attempt and lands in the window's upper half, so a fleet
+// does not come back in step. Doubling, not shifting: a shift wraps.
 func (c *Client) backoff(attempt int) time.Duration {
 	window := c.retryWait
 	for i := 0; i < attempt && window > 0 && window < c.maxRetryWait; i++ {
@@ -214,9 +202,8 @@ func retryAfter(resp *http.Response) time.Duration {
 	return 0
 }
 
-// drain reads a bounded amount of a discarded response so its connection can go
-// back to the pool. A body larger than the bound does not reach EOF, and that
-// connection is closed instead of reused. Cheaper than reading it all.
+// drain bounds the read. A larger body never reaches EOF and its connection is
+// dropped rather than reused.
 func drain(resp *http.Response) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	_ = resp.Body.Close()
@@ -239,8 +226,7 @@ func decode(method, url string, resp *http.Response, result any) error {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
-	// A 200 with nothing in it would otherwise decode to a zero value and be
-	// returned as success, so a by-ID call could hand back a nil and no error.
+	// Otherwise a by-ID call hands back a nil and no error.
 	if len(bytes.TrimSpace(body)) == 0 {
 		if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusResetContent {
 			return nil
