@@ -27,11 +27,13 @@ func pagedTenants(t *testing.T, pages *atomic.Int32) http.Handler {
 			ids = []string{"c", "d"}
 		case "2":
 			ids = []string{"e"}
+		case "3":
+			ids = nil
 		default:
 			t.Errorf("unexpected page %q", page)
 		}
 
-		var items []string
+		items := make([]string, 0, len(ids))
 		for _, id := range ids {
 			items = append(items, fmt.Sprintf(`{"tenant_id":%q}`, id))
 		}
@@ -57,8 +59,9 @@ func TestAllTenantsWalksPages(t *testing.T) {
 	if want := "a b c d e"; strings.Join(got, " ") != want {
 		t.Errorf("collected %v, want %s", got, want)
 	}
-	if requests.Load() != 3 {
-		t.Errorf("%d requests, want 3", requests.Load())
+	// Four, not three: the walk ends on an empty page rather than a short one.
+	if requests.Load() != 4 {
+		t.Errorf("%d requests, want 4", requests.Load())
 	}
 }
 

@@ -40,8 +40,9 @@ func TestTimeUnmarshal(t *testing.T) {
 		want string
 	}{
 		{`"2023-05-15T14:30:00"`, "2023-05-15T14:30:00"},
-		{`"2023-05-15T14:30:00Z"`, "2023-05-15T14:30:00"},
-		{`"2023-05-15T16:30:00+02:00"`, "2023-05-15T16:30:00"},
+		{`"2023-05-15T14:30:00Z"`, "2023-05-15T14:30:00Z"},
+		{`"2023-05-15T16:30:00+02:00"`, "2023-05-15T16:30:00+02:00"},
+		{`"2025-05-24"`, "2025-05-24"},
 		{`null`, ""},
 		{`""`, ""},
 	}
@@ -83,5 +84,29 @@ func TestTimeRoundTrip(t *testing.T) {
 
 	if b, _ := json.Marshal(wrapper{}); string(b) != `{"at":null}` {
 		t.Errorf("zero marshalled as %s, want null", b)
+	}
+}
+
+// A date must not come back as a timestamp, and an offset must survive.
+func TestTimeMarshalsInTheLayoutItArrivedIn(t *testing.T) {
+	for _, want := range []string{
+		`"2025-05-24"`,
+		`"2025-05-24T08:00:00"`,
+		`"2025-05-24T08:00:00+02:00"`,
+	} {
+		var got Time
+		if err := json.Unmarshal([]byte(want), &got); err != nil {
+			t.Errorf("Unmarshal(%s): %v", want, err)
+			continue
+		}
+
+		b, err := json.Marshal(got)
+		if err != nil {
+			t.Errorf("Marshal(%s): %v", want, err)
+			continue
+		}
+		if string(b) != want {
+			t.Errorf("round trip of %s gave %s", want, b)
+		}
 	}
 }

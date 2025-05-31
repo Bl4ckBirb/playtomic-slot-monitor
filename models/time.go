@@ -18,6 +18,10 @@ const DateFormat = "2006-01-02"
 // into a real instant. A date-only value parses to midnight.
 type Time struct {
 	time.Time
+
+	// layout is what this value arrived in, so a date does not come back out
+	// as a timestamp and an offset is not silently dropped.
+	layout string
 }
 
 func (t *Time) UnmarshalJSON(b []byte) error {
@@ -34,7 +38,7 @@ func (t *Time) UnmarshalJSON(b []byte) error {
 
 	for _, layout := range []string{TimeFormat, time.RFC3339, DateFormat} {
 		if parsed, err := time.Parse(layout, s); err == nil {
-			t.Time = parsed
+			t.Time, t.layout = parsed, layout
 			return nil
 		}
 	}
@@ -45,14 +49,21 @@ func (t Time) MarshalJSON() ([]byte, error) {
 	if t.IsZero() {
 		return []byte("null"), nil
 	}
-	return []byte(`"` + t.Format(TimeFormat) + `"`), nil
+	return []byte(`"` + t.Format(t.format()) + `"`), nil
 }
 
 func (t Time) String() string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.Format(TimeFormat)
+	return t.Format(t.format())
+}
+
+func (t Time) format() string {
+	if t.layout == "" {
+		return TimeFormat
+	}
+	return t.layout
 }
 
 // ParseTime parses a time string in Playtomic's format

@@ -10,10 +10,12 @@ import (
 // DefaultPageSize is what the All iterators ask for when params leave Size unset.
 const DefaultPageSize = 100
 
-// paginate walks pages until one comes back short. A failure yields the zero
-// value with the error once and ends the sequence, so a caller that ignores the
-// error still terminates.
-func paginate[T any](ctx context.Context, size int, fetch func(context.Context, int) ([]T, error)) iter.Seq2[T, error] {
+// paginate walks pages until one comes back empty. Stopping on a short page
+// would be one request cheaper, but the server is free to cap the size we ask
+// for, and then every walk would quietly stop after page zero. A failure yields
+// the zero value with the error once and ends the sequence, so a caller that
+// ignores the error still terminates.
+func paginate[T any](ctx context.Context, fetch func(context.Context, int) ([]T, error)) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {
 		var zero T
 
@@ -24,14 +26,14 @@ func paginate[T any](ctx context.Context, size int, fetch func(context.Context, 
 				return
 			}
 
+			if len(items) == 0 {
+				return
+			}
+
 			for _, item := range items {
 				if !yield(item, nil) {
 					return
 				}
-			}
-
-			if len(items) < size {
-				return
 			}
 		}
 	}
@@ -47,7 +49,7 @@ func (c *Client) AllClasses(ctx context.Context, params *models.SearchClassesPar
 		q.Size = DefaultPageSize
 	}
 
-	return paginate(ctx, q.Size, func(ctx context.Context, page int) ([]models.Class, error) {
+	return paginate(ctx, func(ctx context.Context, page int) ([]models.Class, error) {
 		q.Page = page
 		return c.SearchClasses(ctx, &q)
 	})
@@ -63,7 +65,7 @@ func (c *Client) AllLessons(ctx context.Context, params *models.SearchLessonsPar
 		q.Size = DefaultPageSize
 	}
 
-	return paginate(ctx, q.Size, func(ctx context.Context, page int) ([]models.Lesson, error) {
+	return paginate(ctx, func(ctx context.Context, page int) ([]models.Lesson, error) {
 		q.Page = page
 		return c.SearchLessons(ctx, &q)
 	})
@@ -79,7 +81,7 @@ func (c *Client) AllMatches(ctx context.Context, params *models.SearchMatchesPar
 		q.Size = DefaultPageSize
 	}
 
-	return paginate(ctx, q.Size, func(ctx context.Context, page int) ([]models.Match, error) {
+	return paginate(ctx, func(ctx context.Context, page int) ([]models.Match, error) {
 		q.Page = page
 		return c.SearchMatches(ctx, &q)
 	})
@@ -95,7 +97,7 @@ func (c *Client) AllTenants(ctx context.Context, params *models.SearchTenantsPar
 		q.Size = DefaultPageSize
 	}
 
-	return paginate(ctx, q.Size, func(ctx context.Context, page int) ([]models.Tenant, error) {
+	return paginate(ctx, func(ctx context.Context, page int) ([]models.Tenant, error) {
 		q.Page = page
 		return c.SearchTenants(ctx, &q)
 	})
