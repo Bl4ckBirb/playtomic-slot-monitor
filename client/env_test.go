@@ -88,3 +88,53 @@ func TestHeadersReachTheRequest(t *testing.T) {
 		t.Fatalf("SearchClasses: %v", err)
 	}
 }
+
+func TestUserAgentPrecedenceIsOptionOrder(t *testing.T) {
+	agent := func(opts ...Option) string {
+		return NewClient(opts...).headers.Get("User-Agent")
+	}
+
+	if got := agent(WithUserAgent("first"), WithHeader("User-Agent", "second")); got != "second" {
+		t.Errorf("User-Agent = %q, want the later option", got)
+	}
+	if got := agent(WithHeader("User-Agent", "first"), WithUserAgent("second")); got != "second" {
+		t.Errorf("User-Agent = %q, want the later option", got)
+	}
+}
+
+func TestExplicitOptionBeatsEnvHeader(t *testing.T) {
+	t.Setenv(EnvHeaders, "User-Agent: from-env")
+
+	c, err := NewFromEnv(WithUserAgent("explicit"))
+	if err != nil {
+		t.Fatalf("NewFromEnv: %v", err)
+	}
+	if got := c.headers.Get("User-Agent"); got != "explicit" {
+		t.Errorf("User-Agent = %q, want the explicit option to win", got)
+	}
+}
+
+// One header per line is what lets a value carry a comma.
+func TestHeaderValueKeepsCommas(t *testing.T) {
+	t.Setenv(EnvHeaders, "X-List: a,b\nX-Other: c")
+
+	c, err := NewFromEnv()
+	if err != nil {
+		t.Fatalf("NewFromEnv: %v", err)
+	}
+	if got := c.headers.Get("X-List"); got != "a,b" {
+		t.Errorf("X-List = %q, want it kept whole", got)
+	}
+	if got := c.headers.Get("X-Other"); got != "c" {
+		t.Errorf("X-Other = %q", got)
+	}
+}
+
+// HTAB is legal inside a field value, unlike the other control characters.
+func TestHeaderValueAllowsTab(t *testing.T) {
+	t.Setenv(EnvHeaders, "X-Spaced: a\tb")
+
+	if _, err := NewFromEnv(); err != nil {
+		t.Errorf("an internal tab should be accepted: %v", err)
+	}
+}

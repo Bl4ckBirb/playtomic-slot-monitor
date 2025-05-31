@@ -93,6 +93,8 @@ func TestTimeMarshalsInTheLayoutItArrivedIn(t *testing.T) {
 		`"2025-05-24"`,
 		`"2025-05-24T08:00:00"`,
 		`"2025-05-24T08:00:00+02:00"`,
+		`"2025-05-24T08:00:00.123+02:00"`,
+		`"2025-05-24T08:00:00.5Z"`,
 	} {
 		var got Time
 		if err := json.Unmarshal([]byte(want), &got); err != nil {

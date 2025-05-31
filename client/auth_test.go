@@ -214,8 +214,9 @@ func TestAuthRequestsDropConfiguredAuthorization(t *testing.T) {
 }
 
 func TestTokenSourceRespectsContextWhileAnotherRenews(t *testing.T) {
-	release := make(chan struct{})
+	inLogin, release := make(chan struct{}), make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(inLogin)
 		<-release
 		fmt.Fprint(w, `{"access_token":"t"}`)
 	}))
@@ -225,18 +226,33 @@ func TestTokenSourceRespectsContextWhileAnotherRenews(t *testing.T) {
 	c := NewClient(WithBaseURL(srv.URL), WithCredentials("player@example.com", "hunter2"))
 	source := c.tokenSource
 
-	// First caller occupies the gate and blocks on the server.
-	started := make(chan struct{})
-	go func() {
-		close(started)
-		_, _ = source.Token(context.Background())
-	}()
-	<-started
+	go func() { _, _ = source.Token(context.Background()) }()
+
+	// Wait until the first caller is inside the login and holding the gate.
+	// Signalling before the goroutine starts would let the timed caller take
+	// the gate itself and pass without testing anything.
+	<-inLogin
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
 	if _, err := source.Token(ctx); !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("got %v, want the waiter to give up on its own deadline", err)
+	}
+}
+
+// A 401 arriving late for a superseded token must not discard the replacement.
+func TestInvalidateOnlyClearsTheRejectedToken(t *testing.T) {
+	s := newCredentials(nil, "player@example.com", "hunter2")
+	s.token = &Token{AccessToken: "token-B"}
+
+	s.invalidate("token-A")
+	if s.token == nil {
+		t.Fatal("a 401 for an old bearer cleared the current token")
+	}
+
+	s.invalidate("token-B")
+	if s.token != nil {
+		t.Error("a 401 for the current bearer should have cleared it")
 	}
 }

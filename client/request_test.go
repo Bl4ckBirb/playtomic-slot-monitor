@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -144,7 +145,7 @@ func TestLongRetryAfterGivesUp(t *testing.T) {
 		t.Fatalf("got %T, want *Error", err)
 	}
 	if apiErr.RetryAfter != time.Minute {
-		t.Errorf("RetryAfter = %v, want 1m so the caller can decide", apiErr.RetryAfter)
+		t.Errorf("RetryAfter = %v, want exactly what the server asked for", apiErr.RetryAfter)
 	}
 	if calls.Load() != 1 {
 		t.Errorf("%d attempts, want 1", calls.Load())
@@ -224,6 +225,8 @@ func TestRetryAfter(t *testing.T) {
 		{"0", 0},
 		{"-5", 0},
 		{"soon", 0},
+		{"172800", 48 * time.Hour},
+		{"99999999999999", math.MaxInt64},
 		{"Mon, 02 Jan 2006 15:04:05 GMT", 0},
 	}
 
@@ -240,11 +243,27 @@ func TestRetryAfter(t *testing.T) {
 	}
 }
 
+// A window that would overflow while doubling must land on the cap, not on
+// whatever a wrapped value happens to be. The old shift could wrap to a small
+// positive and pass a naive bounds check.
+func TestBackoffDoesNotOverflow(t *testing.T) {
+	c := NewClient(WithBackoff((1<<62)+1, math.MaxInt64))
+
+	for range 50 {
+		if got := c.backoff(2); got < c.maxRetryWait/2 {
+			t.Fatalf("backoff %v below half the cap %v", got, c.maxRetryWait)
+		}
+	}
+}
+
 func TestBackoffStaysInsideItsWindow(t *testing.T) {
 	c := NewClient(WithBackoff(100*time.Millisecond, 2*time.Second))
 
 	for attempt := range 8 {
-		window := min(c.retryWait<<attempt, c.maxRetryWait)
+		window := c.retryWait
+		for range attempt {
+			window = min(window*2, c.maxRetryWait)
+		}
 		for range 50 {
 			if got := c.backoff(attempt); got < window/2 || got > window {
 				t.Fatalf("attempt %d: %v outside [%v, %v]", attempt, got, window/2, window)
