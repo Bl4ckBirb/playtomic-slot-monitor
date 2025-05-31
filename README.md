@@ -1,161 +1,144 @@
-# Go Playtomic API Client
+# go-playtomic-api
 
-A Go client library for interacting with the [Playtomic](https://playtomic.io) API - the sports facility booking system.
+A Go client for the [Playtomic](https://playtomic.io) API, the padel and tennis court booking platform. No third-party dependencies.
 
-## Project Status
+## Status
 
-**Pre-1.0 Software**: This library is under active development and has not reached a major version release yet. As per semantic versioning practices, minor version releases (0.x.y) may include backward incompatible changes until we reach version 1.0.0.
+Pre-1.0. Minor releases can break compatibility until 1.0.0. [CHANGELOG.md](./CHANGELOG.md) records what moved.
 
-## Features
-
-- Coverage of some of the Playtomic API endpoints (WIP)
-- Simple and intuitive API
-- Strongly typed request and response models with context-aware request handling
-- Customizable request timeouts and retries
-- Error handling with detailed API error information
-
-## Installation
+## Install
 
 ```bash
 go get github.com/rafa-garcia/go-playtomic-api
 ```
 
-## Quick Start
+## Quick start
 
 ```go
-package main
+c := client.NewClient(client.WithTimeout(10 * time.Second))
 
-import (
-	"context"
-	"fmt"
-	"log"
-	"time"
+matches, err := c.SearchMatches(ctx, &models.SearchMatchesParams{
+	SportID:       "PADEL",
+	TenantIDs:     []string{tenantID},
+	FromStartDate: time.Now(),
+	HasPlayers:    true,
+})
+if err != nil {
+	log.Fatal(err)
+}
 
-	"github.com/rafa-garcia/go-playtomic-api/client"
-	"github.com/rafa-garcia/go-playtomic-api/models"
-)
-
-func main() {
-	// Create a client with custom options
-	c := client.NewClient(
-		client.WithTimeout(10 * time.Second),
-		client.WithRetries(3),
-	)
-
-	// Set up search parameters
-	params := &models.SearchClassesParams{
-		Sort:          "start_date,ASC",
-		Status:        "PENDING,IN_PROGRESS",
-		TenantIDs:     []string{"tenant-id-1", "tenant-id-2"},
-		FromStartDate: time.Now().Format("2006-01-02") + "T00:00:00",
-	}
-
-	// Fetch classes
-	ctx := context.Background()
-	classes, err := c.SearchClasses(ctx, params)
-	if err != nil {
-		log.Fatalf("Error fetching classes: %v", err)
-	}
-
-	// Display results
-	for _, class := range classes {
-		fmt.Printf("Class: %s at %s (%s)\n", 
-			class.CourseSummary.Name,
-			class.Tenant.TenantName,
-			class.StartDate)
-	}
+for _, m := range matches {
+	fmt.Printf("%s %s %.1f-%.1f\n", m.StartDate, m.Tenant.TenantName, m.MinLevel, m.MaxLevel)
 }
 ```
 
-## Client Configuration
+## Endpoints
 
-The client can be customized with various options:
+| Methods | Request |
+| --- | --- |
+| `SearchClasses`, `AllClasses` | `GET /v1/classes` |
+| `SearchLessons`, `AllLessons` | `GET /v1/lessons` |
+| `SearchMatches`, `AllMatches` | `GET /v1/matches` |
+| `SearchTenants`, `AllTenants` | `GET /v1/tenants` |
+| `GetTenant` | `GET /v1/tenants/{id}` |
+| `GetAvailability` | `GET /v1/availability` |
+| `Login` | `POST /v3/auth/login` |
+| `Refresh` | `POST /v3/auth/token` |
+
+`Search` returns one page. `All` walks every page.
+
+## Configuration
 
 ```go
-client := client.NewClient(
-    // Set a custom base URL (useful for testing)
-    client.WithBaseURL("https://api.playtomic.io"),
-    
-    // Set HTTP client timeout
-    client.WithTimeout(15 * time.Second),
-    
-    // Configure request retries
-    client.WithRetries(3),
-    
-    // Log a record per request attempt at debug level
-    client.WithLogger(slog.Default()),
-    
-    // Set custom User-Agent
-    client.WithUserAgent("MyApp/1.0"),
-    
-    // Use a custom HTTP client
-    client.WithHTTPClient(customHTTPClient),
+c := client.NewClient(
+	client.WithBaseURL("https://api.playtomic.io"),
+	client.WithTimeout(15*time.Second),
+	client.WithRetries(3),
+	client.WithBackoff(500*time.Millisecond, 10*time.Second),
+	client.WithUserAgent("my-app/1.0"),
+	client.WithHeader("X-Something", "value"),
+	client.WithLogger(slog.Default()),
+	client.WithHTTPClient(myHTTPClient),
 )
 ```
 
-## API Documentation
-
-For detailed information about API endpoints, parameters, and examples, see:
-
-- [Endpoint Documentation](./docs/endpoints.md) - Complete details on all supported API endpoints
-- [Examples](./examples) - Code examples showing usage patterns
-
-## Error Handling
-
-The client provides detailed error handling:
-
-Status codes map onto sentinels, so branch with `errors.Is`:
+Nothing deployment-specific is compiled in. `NewFromEnv` reads it instead, and options passed alongside still win:
 
 ```go
-classes, err := c.SearchClasses(ctx, params)
+c, err := client.NewFromEnv()
+```
+
+| Variable | Effect |
+| --- | --- |
+| `PLAYTOMIC_BASE_URL` | API host |
+| `PLAYTOMIC_USER_AGENT` | `User-Agent` header |
+| `PLAYTOMIC_TIMEOUT` | Go duration, such as `15s` |
+| `PLAYTOMIC_MAX_RETRIES` | Retry budget per request |
+| `PLAYTOMIC_HEADERS` | Extra headers as `Name: value`, separated by commas or newlines |
+| `PLAYTOMIC_ACCESS_TOKEN` | Bearer token |
+| `PLAYTOMIC_EMAIL`, `PLAYTOMIC_PASSWORD` | Credentials to log in with |
+
+A variable that is set but unparseable is an error at construction rather than a quiet fall back to the default.
+
+## Authentication
+
+Three ways in, depending on where the token lives:
+
+```go
+client.WithToken(accessToken)              // one you already hold
+client.WithCredentials(email, password)    // log in lazily, renew on expiry
+client.WithTokenSource(mySource)           // your own storage
+```
+
+`WithCredentials` logs in on the first call that needs a token and refreshes it before expiry. Concurrent callers on a cold client produce one login between them, not one each.
+
+`Login` and `Refresh` are exported if you would rather hold the token yourself.
+
+## Pagination
+
+```go
+for match, err := range c.AllMatches(ctx, params) {
+	if err != nil {
+		return err
+	}
+	fmt.Println(match.MatchID, match.StartDate)
+}
+```
+
+The iterator stops when a page comes back short, and breaking out of the loop stops the requests. It works on a copy of your params, so your `Page` stays put.
+
+## Errors
+
+Status codes unwrap to sentinels, so branch with `errors.Is`:
+
+```go
 switch {
 case errors.Is(err, client.ErrRateLimited):
-    // Back off. apiErr.RetryAfter carries what the server asked for.
+	// apiErr.RetryAfter carries what the server asked for
 case errors.Is(err, client.ErrUnauthorized):
-    // Token expired.
+	// token expired
 case err != nil:
-    var apiErr *client.Error
-    if errors.As(err, &apiErr) {
-        log.Printf("%d %s (request %s)", apiErr.StatusCode, apiErr.Message, apiErr.RequestID)
-    }
+	var apiErr *client.Error
+	if errors.As(err, &apiErr) {
+		log.Printf("%d %s (request %s)", apiErr.StatusCode, apiErr.Message, apiErr.RequestID)
+	}
 }
 ```
 
-`*client.Error` keeps the method, URL, status, request ID and a flattened snippet of the body, so a response that never reached the API still says what happened rather than failing on a JSON decode.
+`ErrBadRequest`, `ErrUnauthorized`, `ErrForbidden`, `ErrNotFound`, `ErrRateLimited` and `ErrServer` are the set. `*client.Error` keeps the method, URL, status, request ID, `Retry-After` and a flattened snippet of the body, so a response that never reached the API still says what happened instead of failing on a JSON decode.
 
-## Examples
+## Retries
 
-See the [examples](./examples) directory for more usage examples.
+Transport failures and 429 are retried, 5xx only on idempotent methods, and 501 never. The window doubles per attempt and lands in its upper half so a fleet of clients does not resynchronise on one outage. A `Retry-After` from the server overrides that, capped by `WithBackoff`.
+
+## Times
+
+The API sends wall-clock timestamps with no zone. `models.Time` parses them, along with RFC 3339, date-only values and null, and a tenant's `Address.Timezone` is what turns one into a real instant.
 
 ## Contributing
 
-Contributions to improve go-playtomic-api are welcome! Here's how you can help:
+Issues and pull requests welcome. Please include tests, and run `go test ./...` and `golangci-lint run` before opening one.
 
-1. **Report Issues**: File bugs or feature requests on the issue tracker
-2. **Suggest Improvements**: Propose changes through pull requests
-3. **Add Endpoints**: Implement support for new Playtomic API endpoints
-4. **Improve Documentation**: Help keep docs clear, accurate and up-to-date
+## Licence
 
-To contribute code:
-
-```bash
-# Clone the repository
-git clone https://github.com/rafa-garcia/go-playtomic-api.git
-
-# Create a feature branch
-git checkout -b my-new-feature
-
-# Make your changes and commit
-git commit -am 'Add new feature'
-
-# Push to your fork
-git push origin my-new-feature
-
-# Create a Pull Request
-```
-
-Please include tests and documentation with your changes!
-
-## License
-
-MIT License - see [LICENSE](./LICENSE) file for details.
+MIT. See [LICENSE](./LICENSE).

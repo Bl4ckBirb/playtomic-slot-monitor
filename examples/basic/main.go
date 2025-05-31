@@ -1,8 +1,13 @@
-// Example showing basic usage of the Playtomic API client
+// Command basic looks up a club, lists its upcoming matches and prints what
+// courts are free today.
+//
+// Set PLAYTOMIC_TENANT_ID to a club ID. Everything else the client needs comes
+// from the other PLAYTOMIC_* variables.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -13,184 +18,96 @@ import (
 )
 
 func main() {
-	// Create a client with options
-	c := client.NewClient(
-		client.WithTimeout(15*time.Second),
-		client.WithRetries(2),
-	)
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
 
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func run() error {
+	tenantID := os.Getenv("PLAYTOMIC_TENANT_ID")
+	if tenantID == "" {
+		return errors.New("set PLAYTOMIC_TENANT_ID to a club ID")
+	}
+
+	c, err := client.NewFromEnv(client.WithTimeout(15 * time.Second))
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	// Search for classes
-	fmt.Println("Searching for classes...")
-	classes, err := searchClasses(ctx, c)
+	club, err := c.GetTenant(ctx, tenantID)
 	if err != nil {
-		log.Fatalf("Error searching classes: %v", err)
+		return fmt.Errorf("looking up the club: %w", err)
 	}
+	fmt.Printf("%s, %s\n\n", club.TenantName, club.Address.City)
 
-	// Display classes
-	fmt.Printf("Found %d classes\n", len(classes))
-	for i, class := range classes {
-		if i >= 3 {
-			fmt.Println("...")
-			break
-		}
-
-		fmt.Printf("- %s at %s (%s to %s)\n",
-			getClassTitle(class),
-			class.Tenant.TenantName,
-			class.StartDate,
-			class.EndDate)
+	if err := printMatches(ctx, c, tenantID); err != nil {
+		return err
 	}
-
-	fmt.Println()
-
-	// Search for matches
-	fmt.Println("Searching for matches...")
-	matches, err := searchMatches(ctx, c)
-	if err != nil {
-		log.Fatalf("Error searching matches: %v", err)
-	}
-
-	// Display matches
-	fmt.Printf("Found %d matches\n", len(matches))
-	for i, match := range matches {
-		if i >= 3 {
-			fmt.Println("...")
-			break
-		}
-
-		fmt.Printf("- %s match at %s (%s): %d of %d players\n",
-			match.MatchType,
-			match.Tenant.TenantName,
-			match.StartDate,
-			countPlayers(match),
-			totalPlayerSlots(match))
-	}
-
-	fmt.Println()
-
-	// Search for lessons
-	fmt.Println("Searching for lessons...")
-	lessons, err := searchLessons(ctx, c)
-	if err != nil {
-		log.Fatalf("Error searching lessons: %v", err)
-	}
-
-	// Display lessons
-	fmt.Printf("Found %d lessons\n", len(lessons))
-	for i, lesson := range lessons {
-		if i >= 3 {
-			fmt.Println("...")
-			break
-		}
-
-		fmt.Printf("- %s at %s (%s): %d of %d players, %d available spots\n",
-			lesson.TournamentName,
-			lesson.Tenant.TenantName,
-			lesson.StartDate,
-			len(lesson.RegisteredPlayers),
-			lesson.MaxPlayers,
-			lesson.AvailablePlaces)
-
-		// Demonstrate model conversion if there are players
-		if len(lesson.RegisteredPlayers) > 0 {
-			// Convert lesson player to standard player
-			lessonPlayer := &lesson.RegisteredPlayers[0]
-			player := models.LessonPlayerToPlayer(lessonPlayer)
-
-			fmt.Printf("  Player: %s (converted from LessonPlayer)\n", player.Name)
-		}
-	}
+	return printFreeCourts(ctx, c, tenantID)
 }
 
-// searchClasses demonstrates searching for classes
-func searchClasses(ctx context.Context, c *client.Client) ([]models.Class, error) {
-	// Build search parameters
-	classParams := &models.SearchClassesParams{
-		Sort:             "start_date,ASC",
-		Status:           "PENDING,IN_PROGRESS",
-		Type:             "COURSE,PUBLIC",
-		IncludeSummary:   true,
-		Size:             100,
-		Page:             0,
-		CourseVisibility: "PUBLIC",
-		FromStartDate:    time.Now(),
-	}
+func printMatches(ctx context.Context, c *client.Client, tenantID string) error {
+	fmt.Println("Upcoming matches")
 
-	// Add tenant IDs if provided
-	tenantID := os.Getenv("PLAYTOMIC_TENANT_ID")
-	if tenantID != "" {
-		classParams.TenantIDs = []string{tenantID}
-	}
-
-	return c.SearchClasses(ctx, classParams)
-}
-
-// searchMatches demonstrates searching for matches
-func searchMatches(ctx context.Context, c *client.Client) ([]models.Match, error) {
-	// Build search parameters
-	matchParams := &models.SearchMatchesParams{
-		Sort:          "start_date,DESC",
-		HasPlayers:    true,
+	params := &models.SearchMatchesParams{
 		SportID:       "PADEL",
-		Visibility:    "VISIBLE",
+		TenantIDs:     []string{tenantID},
 		FromStartDate: time.Now(),
-		Size:          100,
-		Page:          0,
+		Visibility:    "VISIBLE",
+		HasPlayers:    true,
 	}
 
-	// Add tenant IDs if provided
-	tenantID := os.Getenv("PLAYTOMIC_TENANT_ID")
-	if tenantID != "" {
-		matchParams.TenantIDs = []string{tenantID}
+	var seen int
+	for match, err := range c.AllMatches(ctx, params) {
+		if err != nil {
+			return fmt.Errorf("listing matches: %w", err)
+		}
+
+		fmt.Printf("  %s  level %.1f to %.1f  %d players\n",
+			match.StartDate, match.MinLevel, match.MaxLevel, players(match))
+
+		if seen++; seen == 10 {
+			break
+		}
 	}
 
-	return c.SearchMatches(ctx, matchParams)
+	if seen == 0 {
+		fmt.Println("  none")
+	}
+	fmt.Println()
+	return nil
 }
 
-// searchLessons demonstrates searching for lessons
-func searchLessons(ctx context.Context, c *client.Client) ([]models.Lesson, error) {
-	// Build search parameters
-	lessonParams := &models.SearchLessonsParams{
-		Sort:                 "start_date,ASC",
-		Status:               "REGISTRATION_OPEN,REGISTRATION_CLOSED,IN_PROGRESS",
-		TournamentVisibility: "PUBLIC",
-		Size:                 100,
-		Page:                 0,
-		FromStartDate:        time.Now(),
+func printFreeCourts(ctx context.Context, c *client.Client, tenantID string) error {
+	now := time.Now()
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
+	courts, err := c.GetAvailability(ctx, &models.AvailabilityParams{
+		TenantID: tenantID,
+		SportID:  "PADEL",
+		From:     day,
+		To:       day.Add(24 * time.Hour),
+	})
+	if err != nil {
+		return fmt.Errorf("reading availability: %w", err)
 	}
 
-	// Add tenant ID if provided
-	// Note: Lessons API only accepts a single tenant_id, not a list
-	tenantID := os.Getenv("PLAYTOMIC_TENANT_ID")
-	if tenantID != "" {
-		lessonParams.TenantID = tenantID
+	fmt.Println("Free today")
+	for _, court := range courts {
+		for _, slot := range court.Slots {
+			fmt.Printf("  %s  %s  %d min  %s\n", court.ResourceID, slot.StartTime, slot.Duration, slot.Price)
+		}
 	}
-
-	return c.SearchLessons(ctx, lessonParams)
+	return nil
 }
 
-// Helper function to get class title
-func getClassTitle(class models.Class) string {
-	if class.CourseSummary != nil && class.CourseSummary.Name != "" {
-		return class.CourseSummary.Name
+func players(m models.Match) int {
+	var n int
+	for _, team := range m.Teams {
+		n += len(team.Players)
 	}
-	return class.Resource.Name
-}
-
-// Helper function to count registered players in a match
-func countPlayers(match models.Match) int {
-	count := 0
-	for _, team := range match.Teams {
-		count += len(team.Players)
-	}
-	return count
-}
-
-// Helper function to calculate total player slots in a match
-func totalPlayerSlots(match models.Match) int {
-	return match.MinPlayersPerTeam * len(match.Teams)
+	return n
 }
