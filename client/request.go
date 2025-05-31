@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +14,13 @@ import (
 	"strconv"
 	"time"
 )
+
+// maxErrorBody bounds what is read from a failed response. It is diagnostic,
+// not payload, so a server sending gigabytes cannot exhaust the client.
+const maxErrorBody = 32 << 10
+
+// maxRetryAfter saturates an absurd Retry-After rather than overflowing.
+const maxRetryAfter = 24 * time.Hour
 
 // queryParams is satisfied by the search parameter types in models. Declared
 // here rather than there so models stays free of transport concerns.
@@ -40,28 +48,23 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 		reqURL += "?" + query
 	}
 
+	// One acquisition per logical call. Doing it per attempt would call a
+	// user's TokenSource maxRetries+1 times for one request.
+	var bearer string
+	if c.tokenSource != nil {
+		token, err := c.tokenSource.Token(ctx)
+		if err != nil {
+			return fmt.Errorf("acquiring token: %w", err)
+		}
+		bearer = token
+	}
+
 	for attempt := 0; ; attempt++ {
 		req, err := http.NewRequestWithContext(ctx, method, reqURL, bodyReader(body))
 		if err != nil {
 			return fmt.Errorf("creating request: %w", err)
 		}
-
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Accept", "application/json")
-		req.Header.Set("User-Agent", c.userAgent)
-		for name, values := range c.headers {
-			req.Header[name] = values
-		}
-
-		if c.tokenSource != nil {
-			token, err := c.tokenSource.Token(ctx)
-			if err != nil {
-				return fmt.Errorf("acquiring token: %w", err)
-			}
-			if token != "" {
-				req.Header.Set("Authorization", "Bearer "+token)
-			}
-		}
+		c.setHeaders(req, bearer)
 
 		start := time.Now()
 		resp, err := c.httpClient.Do(req)
@@ -73,17 +76,27 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 			if final || !idempotent(method) {
 				return fmt.Errorf("sending request after %d attempts: %w", attempt+1, err)
 			}
-			if err := sleep(ctx, c.backoff(attempt, 0)); err != nil {
+			if err := sleep(ctx, c.backoff(attempt)); err != nil {
 				return err
 			}
 			continue
 		}
 
 		if final || !retriable(method, resp.StatusCode) {
-			return decode(resp, result)
+			return c.finish(method, reqURL, resp, result)
 		}
 
-		wait := c.backoff(attempt, retryAfter(resp))
+		// Honour Retry-After in full rather than coming back early and
+		// deepening the throttle. Asked for longer than we will wait, the
+		// response goes to the caller with RetryAfter set so they can decide.
+		wait := retryAfter(resp)
+		if wait > c.maxRetryWait {
+			return c.finish(method, reqURL, resp, result)
+		}
+		if wait == 0 {
+			wait = c.backoff(attempt)
+		}
+
 		drain(resp)
 		if err := sleep(ctx, wait); err != nil {
 			return err
@@ -91,21 +104,35 @@ func (c *Client) sendRequest(ctx context.Context, method, endpoint, query string
 	}
 }
 
-func (c *Client) log(ctx context.Context, method, url string, attempt int, start time.Time, resp *http.Response, err error) {
-	attrs := []any{
-		slog.String("method", method),
-		slog.String("url", url),
-		slog.Int("attempt", attempt+1),
-		slog.Duration("took", time.Since(start)),
-	}
-	if resp != nil {
-		attrs = append(attrs, slog.Int("status", resp.StatusCode))
-	}
-	if err != nil {
-		attrs = append(attrs, slog.Any("error", err))
+func (c *Client) setHeaders(req *http.Request, bearer string) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", c.userAgent)
+
+	for name, values := range c.headers {
+		req.Header[name] = values
 	}
 
-	c.logger.DebugContext(ctx, "playtomic request", attrs...)
+	// Authorization is owned by the auth options. A bare auth request carries
+	// none, so a configured one must not leak in through WithHeader.
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	} else if c.tokenSource == nil {
+		req.Header.Del("Authorization")
+	}
+}
+
+// finish decodes the response and lets a managed token source know its
+// credential was rejected, so a revoked token does not wedge the client.
+func (c *Client) finish(method, url string, resp *http.Response, result any) error {
+	err := decode(method, url, resp, result)
+
+	if errors.Is(err, ErrUnauthorized) {
+		if source, ok := c.tokenSource.(interface{ invalidate() }); ok {
+			source.invalidate()
+		}
+	}
+	return err
 }
 
 // bodyReader gives each attempt a fresh reader. A nil body must stay nil.
@@ -128,23 +155,27 @@ func idempotent(method string) bool {
 	}
 }
 
-// retriable: a 429 was refused rather than processed, so any method can go
-// again. 501 is a permanent refusal wearing a 5xx.
+// retriable never replays a non-idempotent request: a 429 usually means the
+// server refused it, but nothing in the response proves it. 501 is a permanent
+// refusal wearing a 5xx.
 func retriable(method string, status int) bool {
-	if status == http.StatusTooManyRequests {
-		return true
+	if !idempotent(method) {
+		return false
 	}
-	return status >= 500 && status != http.StatusNotImplemented && idempotent(method)
+	return status == http.StatusTooManyRequests ||
+		(status >= 500 && status != http.StatusNotImplemented)
 }
 
 // backoff doubles the window per attempt and lands in its upper half, so
-// clients that all got the same 503 do not come back in step. Retry-After wins.
-func (c *Client) backoff(attempt int, after time.Duration) time.Duration {
-	if after > 0 {
-		return min(after, c.maxRetryWait)
+// clients that all got the same 503 do not come back in step. Doubling in a
+// loop rather than shifting, because a shift wraps at high attempt counts and
+// can wrap to a positive value small enough to pass a bounds check.
+func (c *Client) backoff(attempt int) time.Duration {
+	window := c.retryWait
+	for i := 0; i < attempt && window > 0 && window < c.maxRetryWait; i++ {
+		window *= 2
 	}
 
-	window := c.retryWait << attempt
 	if window <= 0 || window > c.maxRetryWait {
 		window = c.maxRetryWait
 	}
@@ -162,41 +193,57 @@ func retryAfter(resp *http.Response) time.Duration {
 	}
 
 	if secs, err := strconv.Atoi(v); err == nil {
-		if secs <= 0 {
+		switch {
+		case secs <= 0:
 			return 0
+		case time.Duration(secs) > maxRetryAfter/time.Second:
+			return maxRetryAfter
+		default:
+			return time.Duration(secs) * time.Second
 		}
-		return time.Duration(secs) * time.Second
 	}
 
 	if when, err := http.ParseTime(v); err == nil {
 		if d := time.Until(when); d > 0 {
-			return d
+			return min(d, maxRetryAfter)
 		}
 	}
 
 	return 0
 }
 
-// drain returns the connection to the pool instead of dropping it.
+// drain reads a bounded amount of a discarded response so its connection can go
+// back to the pool. A body larger than the bound does not reach EOF, and that
+// connection is closed instead of reused. Cheaper than reading it all.
 func drain(resp *http.Response) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
 	_ = resp.Body.Close()
 }
 
-func decode(resp *http.Response, result any) error {
+func decode(method, url string, resp *http.Response, result any) error {
 	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
+		return newError(method, url, resp, body)
+	}
+
+	if result == nil {
+		return nil
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: %w", err)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return newError(resp, body)
-	}
-
-	if result == nil || len(bytes.TrimSpace(body)) == 0 {
-		return nil
+	// A 200 with nothing in it would otherwise decode to a zero value and be
+	// returned as success, so a by-ID call could hand back a nil and no error.
+	if len(bytes.TrimSpace(body)) == 0 {
+		if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusResetContent {
+			return nil
+		}
+		return fmt.Errorf("empty body from %s %s (status %d)", method, url, resp.StatusCode)
 	}
 
 	if err := json.Unmarshal(body, result); err != nil {
@@ -204,6 +251,23 @@ func decode(resp *http.Response, result any) error {
 	}
 
 	return nil
+}
+
+func (c *Client) log(ctx context.Context, method, url string, attempt int, start time.Time, resp *http.Response, err error) {
+	attrs := []any{
+		slog.String("method", method),
+		slog.String("url", url),
+		slog.Int("attempt", attempt+1),
+		slog.Duration("took", time.Since(start)),
+	}
+	if resp != nil {
+		attrs = append(attrs, slog.Int("status", resp.StatusCode))
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any("error", err))
+	}
+
+	c.logger.DebugContext(ctx, "playtomic request", attrs...)
 }
 
 func sleep(ctx context.Context, d time.Duration) error {

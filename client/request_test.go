@@ -2,9 +2,11 @@ package client
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -94,7 +96,7 @@ func TestRetryPolicy(t *testing.T) {
 	}{
 		{"503 on GET", http.MethodGet, http.StatusServiceUnavailable, 3},
 		{"429 on GET", http.MethodGet, http.StatusTooManyRequests, 3},
-		{"429 on POST", http.MethodPost, http.StatusTooManyRequests, 3},
+		{"429 on POST", http.MethodPost, http.StatusTooManyRequests, 1},
 		{"503 on POST", http.MethodPost, http.StatusServiceUnavailable, 1},
 		{"501 on GET", http.MethodGet, http.StatusNotImplemented, 1},
 		{"400 on GET", http.MethodGet, http.StatusBadRequest, 1},
@@ -120,22 +122,79 @@ func TestRetryPolicy(t *testing.T) {
 	}
 }
 
-func TestRetryAfterIsCapped(t *testing.T) {
+// A Retry-After longer than we are willing to wait is a refusal, not a retry:
+// coming back early would only deepen the throttle.
+func TestLongRetryAfterGivesUp(t *testing.T) {
+	var calls atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
 		w.Header().Set("Retry-After", "60")
 		w.WriteHeader(http.StatusTooManyRequests)
 	}))
 	defer srv.Close()
 
-	c := NewClient(WithBaseURL(srv.URL), WithRetries(1), fast())
+	c := NewClient(WithBaseURL(srv.URL), WithRetries(3), fast())
 
 	start := time.Now()
-	if err := c.sendRequest(context.Background(), http.MethodGet, "/v1/thing", "", nil, &struct{}{}); err == nil {
-		t.Fatal("expected an error")
+	err := c.sendRequest(context.Background(), http.MethodGet, "/v1/thing", "", nil, &struct{}{})
+	elapsed := time.Since(start)
+
+	var apiErr *Error
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("got %T, want *Error", err)
 	}
-	if elapsed := time.Since(start); elapsed > time.Second {
-		t.Errorf("waited %v, expected the minute to be capped at maxRetryWait", elapsed)
+	if apiErr.RetryAfter != time.Minute {
+		t.Errorf("RetryAfter = %v, want 1m so the caller can decide", apiErr.RetryAfter)
 	}
+	if calls.Load() != 1 {
+		t.Errorf("%d attempts, want 1", calls.Load())
+	}
+	if elapsed > time.Second {
+		t.Errorf("waited %v, should not have waited at all", elapsed)
+	}
+}
+
+// An empty 200 used to decode to a zero value and come back as success.
+func TestEmptySuccessBodyIsAnError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := NewClient(WithBaseURL(srv.URL))
+	if _, err := c.GetTenant(context.Background(), "tenant-1"); err == nil {
+		t.Fatal("an empty 200 should not read as a tenant")
+	}
+}
+
+// A custom RoundTripper may leave resp.Request nil, which newError used to read.
+func TestErrorWithoutRequestOnResponse(t *testing.T) {
+	c := NewClient(
+		WithBaseURL("https://example.test"),
+		WithHTTPClient(&http.Client{Transport: bareTransport{}}),
+	)
+
+	_, err := c.SearchClasses(context.Background(), nil)
+
+	var apiErr *Error
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("got %T, want *Error", err)
+	}
+	if apiErr.Method != http.MethodGet || apiErr.URL != "https://example.test/v1/classes" {
+		t.Errorf("method = %q, url = %q", apiErr.Method, apiErr.URL)
+	}
+}
+
+// bareTransport answers without setting Response.Request, which the stdlib
+// transport does but a third-party one need not.
+type bareTransport struct{}
+
+func (bareTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	return &http.Response{
+		StatusCode: http.StatusForbidden,
+		Header:     http.Header{},
+		Body:       io.NopCloser(strings.NewReader("nope")),
+	}, nil
 }
 
 func TestCancelledContextStopsRetrying(t *testing.T) {
@@ -187,7 +246,7 @@ func TestBackoffStaysInsideItsWindow(t *testing.T) {
 	for attempt := range 8 {
 		window := min(c.retryWait<<attempt, c.maxRetryWait)
 		for range 50 {
-			if got := c.backoff(attempt, 0); got < window/2 || got > window {
+			if got := c.backoff(attempt); got < window/2 || got > window {
 				t.Fatalf("attempt %d: %v outside [%v, %v]", attempt, got, window/2, window)
 			}
 		}

@@ -42,6 +42,10 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
+	if e == nil {
+		return "playtomic: <nil>"
+	}
+
 	var b strings.Builder
 	fmt.Fprintf(&b, "playtomic: %s %s: %d ", e.Method, e.URL, e.StatusCode)
 
@@ -56,6 +60,10 @@ func (e *Error) Error() string {
 }
 
 func (e *Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+
 	switch {
 	case e.StatusCode == http.StatusBadRequest:
 		return ErrBadRequest
@@ -74,10 +82,12 @@ func (e *Error) Unwrap() error {
 	}
 }
 
-func newError(resp *http.Response, body []byte) *Error {
+// newError takes the method and URL as arguments rather than reading
+// resp.Request, which a custom RoundTripper is free to leave nil.
+func newError(method, url string, resp *http.Response, body []byte) *Error {
 	e := &Error{
-		Method:     resp.Request.Method,
-		URL:        resp.Request.URL.String(),
+		Method:     method,
+		URL:        url,
 		StatusCode: resp.StatusCode,
 		Body:       snippet(body),
 		RequestID:  requestID(resp),

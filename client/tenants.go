@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	"github.com/rafa-garcia/go-playtomic-api/models"
@@ -17,5 +18,12 @@ func (c *Client) GetTenant(ctx context.Context, id string) (*models.Tenant, erro
 	if id == "" {
 		return nil, ErrMissingID
 	}
-	return get[*models.Tenant](ctx, c, "/v1/tenants/"+url.PathEscape(id), nil)
+	tenant, err := get[*models.Tenant](ctx, c, "/v1/tenants/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, err
+	}
+	if tenant == nil {
+		return nil, fmt.Errorf("no tenant in the response for %q", id)
+	}
+	return tenant, nil
 }
