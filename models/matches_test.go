@@ -109,3 +109,26 @@ func TestSearchMatchesParamsToURLValues(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchMatchesParamsDateAndPlayerFilters(t *testing.T) {
+	v := (&SearchMatchesParams{
+		ToStartDate:  time.Date(2025, 6, 8, 22, 59, 59, 0, time.UTC),
+		ToCreatedAt:  time.Date(2025, 6, 1, 9, 0, 0, 0, time.UTC),
+		MatchStatus:  "PENDING,PLAYED",
+		UserID:       "me",
+		PlayerUserID: "123",
+	}).ToURLValues()
+
+	want := map[string]string{
+		"to_start_date":  "2025-06-08T22:59:59",
+		"to_created_at":  "2025-06-01T09:00:00",
+		"match_status":   "PENDING,PLAYED",
+		"user_id":        "me",
+		"player_user_id": "123",
+	}
+	for k, w := range want {
+		if got := v.Get(k); got != w {
+			t.Errorf("%s = %q, want %q", k, got, w)
+		}
+	}
+}

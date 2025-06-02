@@ -67,6 +67,11 @@ type SearchMatchesParams struct {
 	TenantIDs     []string
 	Visibility    string
 	FromStartDate time.Time
+	ToStartDate   time.Time
+	ToCreatedAt   time.Time
+	MatchStatus   string
+	UserID        string
+	PlayerUserID  string
 	Size          int
 	Page          int
 }
@@ -100,6 +105,26 @@ func (p *SearchMatchesParams) ToURLValues() url.Values {
 
 	if !p.FromStartDate.IsZero() {
 		values.Set("from_start_date", FormatTime(p.FromStartDate))
+	}
+
+	if !p.ToStartDate.IsZero() {
+		values.Set("to_start_date", FormatTime(p.ToStartDate))
+	}
+
+	if !p.ToCreatedAt.IsZero() {
+		values.Set("to_created_at", FormatTime(p.ToCreatedAt))
+	}
+
+	if s := strings.TrimSpace(p.MatchStatus); s != "" {
+		values.Set("match_status", s)
+	}
+
+	if s := strings.TrimSpace(p.UserID); s != "" {
+		values.Set("user_id", s)
+	}
+
+	if s := strings.TrimSpace(p.PlayerUserID); s != "" {
+		values.Set("player_user_id", s)
 	}
 
 	if p.Size > 0 {
