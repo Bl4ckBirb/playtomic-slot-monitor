@@ -62,9 +62,14 @@ type SearchLessonsParams struct {
 	TenantID             string // Only accepts a single tenant ID, not a list
 	TournamentVisibility string
 	Status               string
+	SportID              string
+	UserID               string
+	Coordinate           *Coordinate
+	Radius               int
 	Size                 int
 	Page                 int
 	FromStartDate        time.Time
+	ToStartDate          time.Time
 }
 
 // ToURLValues converts SearchLessonsParams to url.Values
@@ -98,6 +103,26 @@ func (p *SearchLessonsParams) ToURLValues() url.Values {
 
 	if !p.FromStartDate.IsZero() {
 		values.Set("from_start_date", FormatTime(p.FromStartDate))
+	}
+
+	if !p.ToStartDate.IsZero() {
+		values.Set("to_start_date", FormatTime(p.ToStartDate))
+	}
+
+	if s := strings.TrimSpace(p.SportID); s != "" {
+		values.Set("sport_id", s)
+	}
+
+	if s := strings.TrimSpace(p.UserID); s != "" {
+		values.Set("user_id", s)
+	}
+
+	if p.Coordinate != nil {
+		values.Set("coordinate", p.Coordinate.String())
+
+		if p.Radius > 0 {
+			values.Set("radius", strconv.Itoa(p.Radius))
+		}
 	}
 
 	return values

@@ -89,3 +89,20 @@ func TestSearchLessonsParamsToURLValues(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchLessonsParamsSportLocationAndRange(t *testing.T) {
+	v := (&SearchLessonsParams{
+		ToStartDate: time.Date(2025, 6, 8, 22, 59, 59, 0, time.UTC),
+		SportID:     "PADEL",
+		UserID:      "me",
+		Coordinate:  &Coordinate{Lat: 51.5, Lon: -0.1},
+		Radius:      25000,
+	}).ToURLValues()
+
+	if v.Get("to_start_date") != "2025-06-08T22:59:59" || v.Get("sport_id") != "PADEL" || v.Get("user_id") != "me" {
+		t.Errorf("lessons params = %v", v)
+	}
+	if v.Get("coordinate") == "" || v.Get("radius") != "25000" {
+		t.Errorf("coordinate/radius = %q/%q", v.Get("coordinate"), v.Get("radius"))
+	}
+}
