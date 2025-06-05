@@ -128,3 +128,24 @@ func TestSearchClassesParamsToURLValues(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchClassesParamsSportAndCourseFilters(t *testing.T) {
+	v := (&SearchClassesParams{
+		ToStartDate:  time.Date(2025, 6, 30, 0, 0, 0, 0, time.UTC),
+		SportID:      "PADEL",
+		CourseID:     "c-1",
+		PlayerUserID: "me",
+	}).ToURLValues()
+
+	want := map[string]string{
+		"to_start_date":  "2025-06-30T00:00:00",
+		"sport_id":       "PADEL",
+		"course_id":      "c-1",
+		"player_user_id": "me",
+	}
+	for k, w := range want {
+		if got := v.Get(k); got != w {
+			t.Errorf("%s = %q, want %q", k, got, w)
+		}
+	}
+}

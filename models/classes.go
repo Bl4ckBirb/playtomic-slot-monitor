@@ -49,6 +49,10 @@ type SearchClassesParams struct {
 	Page             int
 	CourseVisibility string
 	FromStartDate    time.Time
+	ToStartDate      time.Time
+	SportID          string
+	CourseID         string
+	PlayerUserID     string
 	Coordinate       *Coordinate
 	Radius           int
 }
@@ -92,6 +96,22 @@ func (p *SearchClassesParams) ToURLValues() url.Values {
 
 	if !p.FromStartDate.IsZero() {
 		values.Set("from_start_date", FormatTime(p.FromStartDate))
+	}
+
+	if !p.ToStartDate.IsZero() {
+		values.Set("to_start_date", FormatTime(p.ToStartDate))
+	}
+
+	if s := strings.TrimSpace(p.SportID); s != "" {
+		values.Set("sport_id", s)
+	}
+
+	if s := strings.TrimSpace(p.CourseID); s != "" {
+		values.Set("course_id", s)
+	}
+
+	if s := strings.TrimSpace(p.PlayerUserID); s != "" {
+		values.Set("player_user_id", s)
 	}
 
 	if p.Coordinate != nil {
