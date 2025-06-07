@@ -66,10 +66,10 @@ func ExampleClient_GetAvailability() {
 	day := time.Now().Truncate(24 * time.Hour)
 
 	courts, err := c.GetAvailability(context.Background(), &models.AvailabilityParams{
-		TenantID: os.Getenv("PLAYTOMIC_TENANT_ID"),
-		SportID:  "PADEL",
-		From:     day,
-		To:       day.Add(24 * time.Hour),
+		TenantIDs: []string{os.Getenv("PLAYTOMIC_TENANT_ID")},
+		SportID:   "PADEL",
+		From:      day,
+		To:        day.Add(24 * time.Hour),
 	})
 	if err != nil {
 		log.Fatal(err)

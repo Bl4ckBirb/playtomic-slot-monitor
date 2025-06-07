@@ -23,10 +23,15 @@ type Slot struct {
 
 // AvailabilityParams defines parameters for querying court availability
 type AvailabilityParams struct {
-	TenantID string
-	SportID  string
-	From     time.Time
-	To       time.Time
+	TenantIDs []string
+	SportID   string
+	// From and To bound the local start time, the wall-clock window a player
+	// reads on the club's calendar.
+	From time.Time
+	To   time.Time
+	// StartMin and StartMax bound the absolute start time, if you need it.
+	StartMin time.Time
+	StartMax time.Time
 }
 
 // ToURLValues converts AvailabilityParams to url.Values
@@ -36,8 +41,8 @@ func (p *AvailabilityParams) ToURLValues() url.Values {
 		return values
 	}
 
-	if s := strings.TrimSpace(p.TenantID); s != "" {
-		values.Set("tenant_id", s)
+	if len(p.TenantIDs) > 0 {
+		values.Set("tenant_id", strings.Join(p.TenantIDs, ","))
 	}
 
 	if s := strings.TrimSpace(p.SportID); s != "" {
@@ -50,6 +55,14 @@ func (p *AvailabilityParams) ToURLValues() url.Values {
 
 	if !p.To.IsZero() {
 		values.Set("local_start_max", FormatTime(p.To))
+	}
+
+	if !p.StartMin.IsZero() {
+		values.Set("start_min", FormatTime(p.StartMin))
+	}
+
+	if !p.StartMax.IsZero() {
+		values.Set("start_max", FormatTime(p.StartMax))
 	}
 
 	return values

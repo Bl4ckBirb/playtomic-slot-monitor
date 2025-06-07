@@ -40,10 +40,10 @@ func TestGetAvailability(t *testing.T) {
 
 	c := NewClient(WithBaseURL(srv.URL))
 	got, err := c.GetAvailability(context.Background(), &models.AvailabilityParams{
-		TenantID: "tenant-123",
-		SportID:  "PADEL",
-		From:     time.Date(2025, 5, 24, 0, 0, 0, 0, time.UTC),
-		To:       time.Date(2025, 5, 24, 23, 59, 59, 0, time.UTC),
+		TenantIDs: []string{"tenant-123"},
+		SportID:   "PADEL",
+		From:      time.Date(2025, 5, 24, 0, 0, 0, 0, time.UTC),
+		To:        time.Date(2025, 5, 24, 23, 59, 59, 0, time.UTC),
 	})
 	if err != nil {
 		t.Fatalf("GetAvailability: %v", err)

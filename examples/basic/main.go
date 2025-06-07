@@ -86,10 +86,10 @@ func printFreeCourts(ctx context.Context, c *client.Client, tenantID string) err
 	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	courts, err := c.GetAvailability(ctx, &models.AvailabilityParams{
-		TenantID: tenantID,
-		SportID:  "PADEL",
-		From:     day,
-		To:       day.Add(24 * time.Hour),
+		TenantIDs: []string{tenantID},
+		SportID:   "PADEL",
+		From:      day,
+		To:        day.Add(24 * time.Hour),
 	})
 	if err != nil {
 		return fmt.Errorf("reading availability: %w", err)
