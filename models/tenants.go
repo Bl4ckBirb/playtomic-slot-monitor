@@ -49,6 +49,7 @@ type SearchTenantsParams struct {
 	PlaytomicStatus string
 	Coordinate      *Coordinate
 	Radius          int
+	WithProperties  []string
 	Size            int
 	Page            int
 }
@@ -82,6 +83,10 @@ func (p *SearchTenantsParams) ToURLValues() url.Values {
 		if p.Radius > 0 {
 			values.Set("radius", strconv.Itoa(p.Radius))
 		}
+	}
+
+	if len(p.WithProperties) > 0 {
+		values.Set("with_properties", strings.Join(p.WithProperties, ","))
 	}
 
 	if p.Size > 0 {
