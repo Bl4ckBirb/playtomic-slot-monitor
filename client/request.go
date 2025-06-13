@@ -27,6 +27,12 @@ type queryParams interface {
 	ToURLValues() url.Values
 }
 
+// rawValues adapts a prebuilt url.Values to queryParams, for the odd endpoint
+// whose query is a single field rather than a params struct.
+type rawValues url.Values
+
+func (v rawValues) ToURLValues() url.Values { return url.Values(v) }
+
 // get fetches path into a T. A nil params arrives non-nil here, hence the
 // nil-safe ToURLValues.
 func get[T any](ctx context.Context, c *Client, path string, params queryParams) (T, error) {

@@ -159,18 +159,22 @@ func (c *Client) authenticate(ctx context.Context, path string, payload map[stri
 		return nil, fmt.Errorf("encoding credentials: %w", err)
 	}
 
-	// No token source and no Authorization: these endpoints produce
-	// authorization, they do not consume it.
-	bare := *c
-	bare.tokenSource = nil
-	if bare.headers.Get("Authorization") != "" {
-		bare.headers = bare.headers.Clone()
-		bare.headers.Del("Authorization")
-	}
-
 	var token Token
-	if err := bare.sendRequest(ctx, http.MethodPost, path, "", body, &token); err != nil {
+	if err := c.withoutAuth().sendRequest(ctx, http.MethodPost, path, "", body, &token); err != nil {
 		return nil, err
 	}
 	return &token, nil
+}
+
+// withoutAuth returns a shallow copy that sends no bearer: no token source and
+// no Authorization header. The auth endpoints produce authorization, they must
+// not consume it, and neither must the pre-login methods check.
+func (c *Client) withoutAuth() *Client {
+	bare := *c
+	bare.tokenSource = nil
+	if bare.headers != nil {
+		bare.headers = bare.headers.Clone()
+		bare.headers.Del("Authorization")
+	}
+	return &bare
 }
