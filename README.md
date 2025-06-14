@@ -34,18 +34,28 @@ for _, m := range matches {
 
 ## Endpoints
 
-| Methods | Request |
+| Method | Request |
 | --- | --- |
 | `SearchClasses`, `AllClasses` | `GET /v1/classes` |
 | `SearchLessons`, `AllLessons` | `GET /v1/lessons` |
 | `SearchMatches`, `AllMatches` | `GET /v1/matches` |
+| `GetMatch` | `GET /v1/matches/{id}` |
+| `SearchCourses`, `AllCourses` | `GET /v1/courses` |
+| `GetCourse` | `GET /v1/courses/{id}` |
+| `SearchTournaments`, `AllTournaments` | `GET /v2/tournaments` |
+| `GetTournament` | `GET /v2/tournaments/{id}` |
 | `SearchTenants`, `AllTenants` | `GET /v1/tenants` |
 | `GetTenant` | `GET /v1/tenants/{id}` |
 | `GetAvailability` | `GET /v1/availability` |
+| `GetMe` | `GET /v2/users/me` |
+| `GetUser` | `GET /v2/users/{id}` |
+| `SearchSocialUsers` | `GET /v1/social/users` |
+| `GetUserStats` | `GET /v1/social/users/{id}/stats` |
+| `GetAuthMethods` | `GET /v3/auth/methods` |
 | `Login` | `POST /v3/auth/login` |
 | `Refresh` | `POST /v3/auth/token` |
 
-`Search` returns one page. `All` walks every page.
+`Search` returns one page, `All` walks every page, and `Get` fetches a single resource.
 
 ## Configuration
 
@@ -130,9 +140,7 @@ case err != nil:
 
 ## Retries
 
-Only idempotent methods are retried, on transport failures, 429 and 5xx, never
-501. A POST is never replayed. The window doubles per attempt and lands in its
-upper half, so a fleet of clients does not resynchronise on one outage.
+Only idempotent methods are retried, on transport failures, 429 and 5xx, never 501. A POST is never replayed. The window doubles per attempt and lands in its upper half, so a fleet of clients does not resynchronise on one outage.
 
 A `Retry-After` is honoured in full rather than shortened. If the server asks for longer than the cap set by `WithBackoff`, the response comes back to you with `Error.RetryAfter` set instead of being retried early.
 
