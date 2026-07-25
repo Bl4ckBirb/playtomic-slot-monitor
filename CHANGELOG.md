@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1] - 2026-07-25
+
+### Fixed
+
+- Point the client at `api.app.playtomic.io`. The old default, `api.playtomic.io`, is behind a CloudFront rule that 403s every request, which is why calls stopped working. The app host wants nothing but a valid token.
+- Login now sends `requested_user_roles`, and refresh sends the token with the roles rather than a `grant_type`, matching what the app sends.
+
 ## [0.3.0] - 2025-06-14
 
 ### Added

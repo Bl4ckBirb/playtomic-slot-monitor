@@ -31,22 +31,36 @@ func (a *authServer) handler(t *testing.T) http.Handler {
 				t.Errorf("auth request carried Authorization %q, want none", got)
 			}
 
-			var payload map[string]string
+			var payload struct {
+				Email        string   `json:"email"`
+				Password     string   `json:"password"`
+				RefreshToken string   `json:"refresh_token"`
+				Roles        []string `json:"requested_user_roles"`
+				GrantType    string   `json:"grant_type"`
+			}
 			body, _ := io.ReadAll(r.Body)
 			if err := json.Unmarshal(body, &payload); err != nil {
 				t.Errorf("auth body %s: %v", body, err)
 			}
 
+			// The real API wants the roles named and has no grant_type.
+			if len(payload.Roles) != 1 || payload.Roles[0] != "ROLE_CUSTOMER" {
+				t.Errorf("requested_user_roles = %v", payload.Roles)
+			}
+			if payload.GrantType != "" {
+				t.Errorf("grant_type = %q, want none", payload.GrantType)
+			}
+
 			expiry := a.loginExpiry
 			if r.URL.Path == DefaultLoginPath {
 				a.logins.Add(1)
-				if payload["email"] != "player@example.com" || payload["password"] != "hunter2" {
-					t.Errorf("login payload = %v", payload)
+				if payload.Email != "player@example.com" || payload.Password != "hunter2" {
+					t.Errorf("login payload = %+v", payload)
 				}
 			} else {
 				a.refreshes.Add(1)
-				if payload["grant_type"] != "refresh_token" {
-					t.Errorf("refresh payload = %v", payload)
+				if payload.RefreshToken == "" {
+					t.Error("refresh payload carried no refresh_token")
 				}
 				expiry = time.Now().UTC().Add(time.Hour).Format("2006-01-02T15:04:05")
 			}

@@ -9,7 +9,9 @@ import (
 
 const (
 	// DefaultBaseURL is the API host. Version prefixes live in the paths.
-	DefaultBaseURL = "https://api.playtomic.io"
+	// The app talks to api.app.playtomic.io. The old api.playtomic.io sits
+	// behind a CloudFront rule that 403s everything.
+	DefaultBaseURL = "https://api.app.playtomic.io"
 
 	// DefaultTimeout is the default client timeout
 	DefaultTimeout = 30 * time.Second

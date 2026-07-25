@@ -16,10 +16,11 @@ const tokenMargin = 30 * time.Second
 
 // Token is the credential pair the auth endpoints return.
 type Token struct {
-	AccessToken  string      `json:"access_token"`
-	RefreshToken string      `json:"refresh_token"`
-	ExpiresAt    models.Time `json:"access_token_expiration"`
-	UserID       string      `json:"user_id"`
+	AccessToken           string      `json:"access_token"`
+	RefreshToken          string      `json:"refresh_token"`
+	ExpiresAt             models.Time `json:"access_token_expiration"`
+	RefreshTokenExpiresAt models.Time `json:"refresh_token_expiration"`
+	UserID                string      `json:"user_id"`
 }
 
 // Expired reports whether the token needs replacing. No stated expiry means
@@ -136,24 +137,29 @@ func (s *credentials) renew(ctx context.Context) (*Token, error) {
 	return s.client.Login(ctx, s.email, s.password)
 }
 
+// customerRoles is what the app requests on login and refresh. The API wants
+// the roles named rather than defaulted.
+var customerRoles = []string{"ROLE_CUSTOMER"}
+
 // Login exchanges credentials for a token. It does not change the client's own
 // authentication: for that use WithToken or WithCredentials.
 func (c *Client) Login(ctx context.Context, email, password string) (*Token, error) {
-	return c.authenticate(ctx, c.loginPath, map[string]string{
-		"email":    email,
-		"password": password,
+	return c.authenticate(ctx, c.loginPath, map[string]any{
+		"email":                email,
+		"password":             password,
+		"requested_user_roles": customerRoles,
 	})
 }
 
 // Refresh trades a refresh token for a fresh pair.
 func (c *Client) Refresh(ctx context.Context, refreshToken string) (*Token, error) {
-	return c.authenticate(ctx, c.refreshPath, map[string]string{
-		"grant_type":    "refresh_token",
-		"refresh_token": refreshToken,
+	return c.authenticate(ctx, c.refreshPath, map[string]any{
+		"refresh_token":        refreshToken,
+		"requested_user_roles": customerRoles,
 	})
 }
 
-func (c *Client) authenticate(ctx context.Context, path string, payload map[string]string) (*Token, error) {
+func (c *Client) authenticate(ctx context.Context, path string, payload map[string]any) (*Token, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("encoding credentials: %w", err)

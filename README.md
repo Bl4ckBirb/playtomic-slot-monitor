@@ -61,7 +61,7 @@ for _, m := range matches {
 
 ```go
 c := client.NewClient(
-	client.WithBaseURL("https://api.playtomic.io"),
+	client.WithBaseURL("https://api.app.playtomic.io"),
 	client.WithTimeout(15*time.Second),
 	client.WithRetries(3),
 	client.WithBackoff(500*time.Millisecond, 10*time.Second),
