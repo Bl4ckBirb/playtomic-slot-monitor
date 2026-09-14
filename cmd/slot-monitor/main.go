@@ -16,17 +16,23 @@ import (
 
 const requestedWith = "com.playtomic.web"
 
+// browserUserAgent presents the client as a normal browser rather than the
+// library default ("PlaytomicGoClient/1.0"), which reads as an obvious bot.
+const browserUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+	"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
 func main() {
 	configPath := flag.String("config", "config.json", "path to the JSON config file")
 	statePath := flag.String("state", "state/seen.json", "path to the seen-slots state file")
+	validate := flag.Bool("validate", false, "validate the config file and exit, without contacting the API")
 	flag.Parse()
 
-	if err := run(*configPath, *statePath); err != nil {
+	if err := run(*configPath, *statePath, *validate); err != nil {
 		log.Fatalf("slot-monitor: %v", err)
 	}
 }
 
-func run(configPath, statePath string) error {
+func run(configPath, statePath string, validateOnly bool) error {
 	cfg, err := loadConfig(configPath)
 	if err != nil {
 		return err
@@ -40,6 +46,11 @@ func run(configPath, statePath string) error {
 		return err
 	}
 
+	if validateOnly {
+		log.Printf("config OK: %d clubs, %d watch windows, timezone %s", len(cfg.Clubs), len(windows), cfg.Timezone)
+		return nil
+	}
+
 	email := os.Getenv("PLAYTOMIC_EMAIL")
 	password := os.Getenv("PLAYTOMIC_PASSWORD")
 	if email == "" || password == "" {
@@ -50,12 +61,18 @@ func run(configPath, statePath string) error {
 	defer cancel()
 
 	// Always log in fresh (no token caching), then use the access token.
-	token, err := client.NewClient(client.WithTimeout(20*time.Second)).Login(ctx, email, password)
+	login := client.NewClient(
+		client.WithUserAgent(browserUserAgent),
+		client.WithHeader("X-Requested-With", requestedWith),
+		client.WithTimeout(20*time.Second),
+	)
+	token, err := login.Login(ctx, email, password)
 	if err != nil {
 		return fmt.Errorf("login: %w", err)
 	}
 	api := client.NewClient(
 		client.WithToken(token.AccessToken),
+		client.WithUserAgent(browserUserAgent),
 		client.WithHeader("X-Requested-With", requestedWith),
 		client.WithTimeout(20*time.Second),
 	)

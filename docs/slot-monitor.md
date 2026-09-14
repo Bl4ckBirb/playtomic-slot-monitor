@@ -63,6 +63,15 @@ time.
 
 Days are `mon tue wed thu fri sat sun`.
 
+The workflow validates the config before each run (`-validate`). A malformed
+`MONITOR_CONFIG` fails the **Validate config** step with the line, column and the
+offending line marked, or the name of an unknown/misspelled field — before any
+API call. Validate locally the same way:
+
+```bash
+go run ./cmd/slot-monitor -validate -config config.json
+```
+
 ## Secrets
 
 Add these under Settings → Secrets and variables → Actions → Secrets:

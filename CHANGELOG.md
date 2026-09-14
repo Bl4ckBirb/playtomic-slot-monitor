@@ -6,6 +6,11 @@
 
 - `GetResources` (`GET /v1/tenants/{id}/resources`) and `models.TenantResource`, exposing a club's courts with typed properties (indoor/outdoor, single/double). Availability only returns `resource_id`, so this resolves those ids to names and features.
 - `cmd/slot-monitor`: a GitHub Actions slot monitor. It logs in, polls availability for the clubs and time windows in a JSON config, and sends a Telegram message when new matching padel slots appear. See `docs/slot-monitor.md`.
+- `cmd/slot-monitor -validate`: validates the config without contacting the API, reporting the line/column (with a caret) for JSON syntax/type errors and the name of unknown fields. The workflow runs it as a pre-flight step.
+
+### Changed
+
+- `cmd/slot-monitor` now sends a browser `User-Agent` instead of the library default, and its workflow pins node24 action releases (`setup-go@v6`, `actions/cache@v5`).
 
 ## [0.3.1] - 2026-07-25
 

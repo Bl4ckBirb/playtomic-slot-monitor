@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -77,8 +80,14 @@ func loadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 	var cfg Config
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config JSON: %w", err)
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, describeJSONError(raw, err)
+	}
+	// Reject trailing content after the JSON object (e.g. a stray brace).
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("config has unexpected data after the JSON object")
 	}
 	if cfg.Timezone == "" {
 		cfg.Timezone = defaultTimezone
@@ -132,6 +141,52 @@ func (c *Config) parseWindows() ([]parsedWindow, error) {
 		windows = append(windows, parsedWindow{days: days, start: start, end: end})
 	}
 	return windows, nil
+}
+
+// describeJSONError turns a json decode error into a message that points at
+// where the config is broken: a line/column and the offending line with a caret
+// for syntax and type errors, or the field name for an unknown/misspelled key.
+func describeJSONError(raw []byte, err error) error {
+	var se *json.SyntaxError
+	if errors.As(err, &se) {
+		line, col := offsetToLineCol(raw, se.Offset)
+		return fmt.Errorf("config JSON syntax error at line %d, column %d: %s\n%s", line, col, se.Error(), lineSnippet(raw, line, col))
+	}
+	var ute *json.UnmarshalTypeError
+	if errors.As(err, &ute) {
+		line, col := offsetToLineCol(raw, ute.Offset)
+		field := ute.Field
+		if field == "" {
+			field = ute.Type.String()
+		}
+		return fmt.Errorf("config JSON type error at line %d, column %d: field %q must be %s (got %s)\n%s", line, col, field, ute.Type, ute.Value, lineSnippet(raw, line, col))
+	}
+	// DisallowUnknownFields yields "json: unknown field \"x\"" without an offset.
+	return fmt.Errorf("config JSON error: %v", err)
+}
+
+// offsetToLineCol converts a byte offset into a 1-based line and column.
+func offsetToLineCol(raw []byte, offset int64) (int, int) {
+	line, col := 1, 1
+	for i := int64(0); i < offset && i < int64(len(raw)); i++ {
+		if raw[i] == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+	return line, col
+}
+
+// lineSnippet renders one source line with a caret under the given column.
+func lineSnippet(raw []byte, line, col int) string {
+	lines := strings.Split(string(raw), "\n")
+	if line < 1 || line > len(lines) {
+		return ""
+	}
+	caret := strings.Repeat(" ", max(col-1, 0)) + "^"
+	return fmt.Sprintf("  %s\n  %s", lines[line-1], caret)
 }
 
 // parseTimeOfDay parses "HH:MM" into a timeOfDay.
