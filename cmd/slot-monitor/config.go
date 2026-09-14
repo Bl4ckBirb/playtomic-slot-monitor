@@ -162,7 +162,7 @@ func describeJSONError(raw []byte, err error) error {
 		return fmt.Errorf("config JSON type error at line %d, column %d: field %q must be %s (got %s)\n%s", line, col, field, ute.Type, ute.Value, lineSnippet(raw, line, col))
 	}
 	// DisallowUnknownFields yields "json: unknown field \"x\"" without an offset.
-	return fmt.Errorf("config JSON error: %v", err)
+	return fmt.Errorf("config JSON error: %w", err)
 }
 
 // offsetToLineCol converts a byte offset into a 1-based line and column.
