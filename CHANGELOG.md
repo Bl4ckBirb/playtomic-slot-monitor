@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `GetResources` (`GET /v1/tenants/{id}/resources`) and `models.TenantResource`, exposing a club's courts with typed properties (indoor/outdoor, single/double). Availability only returns `resource_id`, so this resolves those ids to names and features.
+- `cmd/slot-monitor`: a GitHub Actions slot monitor. It logs in, polls availability for the clubs and time windows in a JSON config, and sends a Telegram message when new matching padel slots appear. See `docs/slot-monitor.md`.
+
 ## [0.3.1] - 2026-07-25
 
 ### Fixed

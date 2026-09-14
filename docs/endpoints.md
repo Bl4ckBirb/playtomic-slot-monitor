@@ -48,6 +48,21 @@ clubs, err := c.SearchTenants(ctx, &models.SearchTenantsParams{
 })
 ```
 
+## Resources
+
+`GET /v1/tenants/{id}/resources` through `GetResources`. Returns a club's courts
+as `[]models.TenantResource` (`ResourceID`, `Name`, and typed `Properties`:
+`ResourceType` indoor/outdoor, `ResourceSize` single/double, `ResourceFeature`).
+Availability identifies courts only by `resource_id`, so this is how you resolve
+those ids to names and indoor/outdoor.
+
+```go
+courts, err := c.GetResources(ctx, tenantID)
+for _, court := range courts {
+	fmt.Println(court.ResourceID, court.Name, court.IsIndoor())
+}
+```
+
 ## Availability
 
 `GET /v1/availability` through `GetAvailability`.

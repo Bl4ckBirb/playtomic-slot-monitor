@@ -148,6 +148,10 @@ A `Retry-After` is honoured in full rather than shortened. If the server asks fo
 
 The API sends wall-clock timestamps with no zone. `models.Time` parses them, along with RFC 3339, date-only values and null, and a tenant's `Address.Timezone` is what turns one into a real instant.
 
+## Slot monitor
+
+`cmd/slot-monitor` is a ready-to-run availability watcher built on this client: a scheduled GitHub Action that checks configured clubs and time windows and sends a Telegram message when new padel slots open up. Its config lives in a repository variable, so no commit is needed to change what it watches. See [docs/slot-monitor.md](docs/slot-monitor.md).
+
 ## Contributing
 
 Issues and pull requests welcome. Please include tests, and run `go test ./...` and `golangci-lint run` before opening one.
